@@ -5,7 +5,7 @@
 
 A Rust-based web service for Raspberry Pi Zero 2 W that provides remote Wake-on-LAN and LUKS unlock functionality for homelab servers.
 
-*Cold server → wake it from the arctic.*
+_Cold server → wake it from the arctic._
 
 ## Features
 
@@ -22,22 +22,21 @@ A Rust-based web service for Raspberry Pi Zero 2 W that provides remote Wake-on-
 - Target server with:
   - Wake-on-LAN enabled in BIOS
   - dropbear SSH in initrd (port 2222) for LUKS unlock
-  - Network cable connected (WOL doesn't work over WiFi)
 
 ## Configuration
 
 Set these environment variables:
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `ARTICWAKE_BIND_HOST` | No | `127.0.0.1` | Bind address |
-| `ARTICWAKE_PORT` | No | `8080` | HTTP port |
-| `ARTICWAKE_HOMELAB_MAC` | **Yes** | - | Target server MAC address |
-| `ARTICWAKE_HOMELAB_IP` | **Yes** | - | Target server IP (Tailscale or LAN) |
-| `ARTICWAKE_HOMELAB_BROADCAST` | No | `255.255.255.255` | WOL broadcast address |
-| `ARTICWAKE_SSH_PORT` | No | `2222` | dropbear SSH port |
-| `ARTICWAKE_SSH_KEY_PATH` | No | `/etc/secrets/articwake-key` | Path to SSH private key |
-| `ARTICWAKE_PIN_HASH_PATH` | No | `/var/lib/articwake/pin.hash` | Path to Argon2 PIN hash file |
+| Variable                      | Required | Default                       | Description                         |
+| ----------------------------- | -------- | ----------------------------- | ----------------------------------- |
+| `ARTICWAKE_BIND_HOST`         | No       | `127.0.0.1`                   | Bind address                        |
+| `ARTICWAKE_PORT`              | No       | `8080`                        | HTTP port                           |
+| `ARTICWAKE_HOMELAB_MAC`       | **Yes**  | -                             | Target server MAC address           |
+| `ARTICWAKE_HOMELAB_IP`        | **Yes**  | -                             | Target server IP (Tailscale or LAN) |
+| `ARTICWAKE_HOMELAB_BROADCAST` | No       | `255.255.255.255`             | WOL broadcast address               |
+| `ARTICWAKE_SSH_PORT`          | No       | `2222`                        | dropbear SSH port                   |
+| `ARTICWAKE_SSH_KEY_PATH`      | No       | `/etc/secrets/articwake-key`  | Path to SSH private key             |
+| `ARTICWAKE_PIN_HASH_PATH`     | No       | `/var/lib/articwake/pin.hash` | Path to Argon2 PIN hash file        |
 
 ## Setup
 
@@ -75,13 +74,13 @@ export ARTICWAKE_HOMELAB_IP="100.x.y.z"
 
 ## API Endpoints
 
-| Endpoint | Method | Auth | Description |
-|----------|--------|------|-------------|
-| `/` | GET | No | Serve embedded web UI |
-| `/api/auth` | POST | No | Verify PIN, return bearer token |
-| `/api/status` | GET | Yes | Server reachability + SSH port status |
-| `/api/wol` | POST | Yes | Send Wake-on-LAN magic packet |
-| `/api/unlock` | POST | Yes | SSH to dropbear, send passphrase |
+| Endpoint      | Method | Auth | Description                           |
+| ------------- | ------ | ---- | ------------------------------------- |
+| `/`           | GET    | No   | Serve embedded web UI                 |
+| `/api/auth`   | POST   | No   | Verify PIN, return bearer token       |
+| `/api/status` | GET    | Yes  | Server reachability + SSH port status |
+| `/api/wol`    | POST   | Yes  | Send Wake-on-LAN magic packet         |
+| `/api/unlock` | POST   | Yes  | SSH to dropbear, send passphrase      |
 
 ### Authentication
 
