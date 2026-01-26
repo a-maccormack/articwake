@@ -107,4 +107,4 @@ curl http://localhost:8080/api/status \
 
 ## License
 
-MIT
+[MIT](LICENSE)
