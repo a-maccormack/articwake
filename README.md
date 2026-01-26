@@ -1,5 +1,8 @@
 # articwake
 
+[![CI](https://github.com/a-maccormack/articwake/actions/workflows/test.yml/badge.svg)](https://github.com/a-maccormack/articwake/actions/workflows/test.yml)
+[![Release](https://img.shields.io/github/v/release/a-maccormack/articwake)](https://github.com/a-maccormack/articwake/releases/latest)
+
 A Rust-based web service for Raspberry Pi Zero 2 W that provides remote Wake-on-LAN and LUKS unlock functionality for homelab servers.
 
 *Cold server → wake it from the arctic.*
