@@ -1,0 +1,6 @@
+export ARTICWAKE_HOMELAB_MAC="aa:bb:cc:dd:ee:ff"
+export ARTICWAKE_HOMELAB_IP="192.168.1.100"
+export ARTICWAKE_SSH_PORT="2222"
+export ARTICWAKE_SSH_KEY_PATH="$HOME/.ssh/your-key"
+export ARTICWAKE_PIN_HASH_PATH="/tmp/articwake/pin.hash"
+export ARTICWAKE_BIND_HOST="0.0.0.0"
