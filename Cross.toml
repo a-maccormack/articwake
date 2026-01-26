@@ -1,0 +1,22 @@
+[target.armv7-unknown-linux-gnueabihf]
+pre-build = [
+    "dpkg --add-architecture armhf",
+    "apt-get update && apt-get install -y gcc-12-arm-linux-gnueabihf g++-12-arm-linux-gnueabihf",
+    "update-alternatives --install /usr/bin/arm-linux-gnueabihf-gcc arm-linux-gnueabihf-gcc /usr/bin/arm-linux-gnueabihf-gcc-12 100",
+    "update-alternatives --install /usr/bin/arm-linux-gnueabihf-g++ arm-linux-gnueabihf-g++ /usr/bin/arm-linux-gnueabihf-g++-12 100"
+]
+
+[target.aarch64-unknown-linux-gnu]
+pre-build = [
+    "dpkg --add-architecture arm64",
+    "apt-get update && apt-get install -y gcc-12-aarch64-linux-gnu g++-12-aarch64-linux-gnu",
+    "update-alternatives --install /usr/bin/aarch64-linux-gnu-gcc aarch64-linux-gnu-gcc /usr/bin/aarch64-linux-gnu-gcc-12 100",
+    "update-alternatives --install /usr/bin/aarch64-linux-gnu-g++ aarch64-linux-gnu-g++ /usr/bin/aarch64-linux-gnu-g++-12 100"
+]
+
+[target.x86_64-unknown-linux-gnu]
+pre-build = [
+    "apt-get update && apt-get install -y gcc-12 g++-12",
+    "update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100",
+    "update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100"
+]
