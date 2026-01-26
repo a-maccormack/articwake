@@ -9,14 +9,49 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  build-x86:
+    name: Build x86_64-unknown-linux-gnu
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: |
+          rustup update stable
+          rustup default stable
+
+      - name: Install GCC 12
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-12 g++-12
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100
+          sudo update-alternatives --install /usr/bin/cc cc /usr/bin/gcc-12 100
+
+      - name: Build
+        run: cargo build --release --target x86_64-unknown-linux-gnu
+        env:
+          CC: gcc-12
+          CXX: g++-12
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p artifacts
+          cp target/x86_64-unknown-linux-gnu/release/articwake artifacts/articwake-x86_64-linux
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: articwake-x86_64-linux
+          path: artifacts/articwake-x86_64-linux
+
+  build-arm:
     name: Build ${{ matrix.target }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
-            artifact: articwake-x86_64-linux
           - target: aarch64-unknown-linux-gnu
             artifact: articwake-aarch64-linux
           - target: armv7-unknown-linux-gnueabihf
@@ -49,7 +84,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: build
+    needs: [build-x86, build-arm]
     runs-on: ubuntu-latest
     permissions:
       contents: write
