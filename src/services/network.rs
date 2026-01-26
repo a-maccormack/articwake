@@ -38,3 +38,48 @@ fn check_tcp_port(ip: &str, port: u16) -> bool {
     }
     false
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_check_host_status_localhost() {
+        // Localhost should be reachable
+        let status = check_host_status("127.0.0.1", 2222);
+        assert!(status.reachable);
+    }
+
+    #[test]
+    fn test_check_host_status_unreachable() {
+        // Non-routable IP should not be reachable (or timeout quickly)
+        let status = check_host_status("192.0.2.1", 2222); // TEST-NET-1, should not route
+        assert!(!status.initrd_ssh_open);
+        assert!(!status.system_ssh_open);
+    }
+
+    #[test]
+    fn test_check_tcp_port_closed() {
+        // Port 59999 should not be open on localhost
+        assert!(!check_tcp_port("127.0.0.1", 59999));
+    }
+
+    #[test]
+    fn test_check_tcp_port_invalid_ip() {
+        assert!(!check_tcp_port("not-an-ip", 80));
+    }
+
+    #[test]
+    fn test_host_status_struct_serialization() {
+        let status = HostStatus {
+            reachable: true,
+            initrd_ssh_open: false,
+            system_ssh_open: true,
+        };
+
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("\"reachable\":true"));
+        assert!(json.contains("\"initrd_ssh_open\":false"));
+        assert!(json.contains("\"system_ssh_open\":true"));
+    }
+}

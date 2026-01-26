@@ -1,9 +1,5 @@
-mod api;
-mod auth;
-mod config;
-mod services;
-
 use actix_web::{web, App, HttpServer, HttpResponse, HttpRequest};
+use articwake::{api, auth, config};
 use rust_embed::Embed;
 use tracing_actix_web::TracingLogger;
 

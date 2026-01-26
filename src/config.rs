@@ -65,3 +65,50 @@ impl Config {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_mac_colon_separated() {
+        assert!(validate_mac("aa:bb:cc:dd:ee:ff").is_ok());
+        assert!(validate_mac("AA:BB:CC:DD:EE:FF").is_ok());
+        assert!(validate_mac("00:11:22:33:44:55").is_ok());
+    }
+
+    #[test]
+    fn test_validate_mac_dash_separated() {
+        assert!(validate_mac("aa-bb-cc-dd-ee-ff").is_ok());
+        assert!(validate_mac("AA-BB-CC-DD-EE-FF").is_ok());
+    }
+
+    #[test]
+    fn test_validate_mac_no_separator() {
+        assert!(validate_mac("aabbccddeeff").is_ok());
+        assert!(validate_mac("AABBCCDDEEFF").is_ok());
+    }
+
+    #[test]
+    fn test_validate_mac_invalid_too_short() {
+        assert!(validate_mac("aabbccddee").is_err());
+        assert!(validate_mac("aa:bb:cc:dd:ee").is_err());
+    }
+
+    #[test]
+    fn test_validate_mac_invalid_too_long() {
+        assert!(validate_mac("aabbccddeeff00").is_err());
+        assert!(validate_mac("aa:bb:cc:dd:ee:ff:00").is_err());
+    }
+
+    #[test]
+    fn test_validate_mac_invalid_chars() {
+        assert!(validate_mac("gg:hh:ii:jj:kk:ll").is_err());
+        assert!(validate_mac("not-a-mac-addr").is_err());
+    }
+
+    #[test]
+    fn test_validate_mac_empty() {
+        assert!(validate_mac("").is_err());
+    }
+}
