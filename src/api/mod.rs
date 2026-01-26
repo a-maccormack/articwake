@@ -3,8 +3,8 @@ pub mod status;
 pub mod unlock;
 pub mod wol;
 
-use actix_web::{HttpRequest, HttpResponse, http::header};
 use crate::auth::{AppState, extract_bearer_token};
+use actix_web::{HttpRequest, HttpResponse, http::header};
 
 pub fn require_auth(req: &HttpRequest, state: &AppState) -> Result<(), HttpResponse> {
     let auth_header = req

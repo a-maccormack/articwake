@@ -60,7 +60,9 @@ impl AppState {
         });
 
         // Remove old attempts outside the window
-        entry.attempts.retain(|t| now.duration_since(*t) < RATE_LIMIT_WINDOW);
+        entry
+            .attempts
+            .retain(|t| now.duration_since(*t) < RATE_LIMIT_WINDOW);
 
         if entry.attempts.len() >= MAX_ATTEMPTS_PER_WINDOW {
             return Err(AuthError::RateLimited);
@@ -141,7 +143,7 @@ mod tests {
     }
 
     fn create_pin_hash(pin: &str) -> NamedTempFile {
-        use argon2::password_hash::{rand_core::OsRng, PasswordHasher, SaltString};
+        use argon2::password_hash::{PasswordHasher, SaltString, rand_core::OsRng};
 
         let salt = SaltString::generate(&mut OsRng);
         let argon2 = Argon2::default();
@@ -156,10 +158,7 @@ mod tests {
 
     #[test]
     fn test_extract_bearer_token_valid() {
-        assert_eq!(
-            extract_bearer_token(Some("Bearer abc123")),
-            Some("abc123")
-        );
+        assert_eq!(extract_bearer_token(Some("Bearer abc123")), Some("abc123"));
         assert_eq!(
             extract_bearer_token(Some("Bearer my-long-token-here")),
             Some("my-long-token-here")

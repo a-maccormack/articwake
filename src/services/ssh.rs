@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use russh::client;
 use russh::keys::ssh_key;
-use russh::keys::{load_secret_key, PrivateKeyWithHashAlg};
+use russh::keys::{PrivateKeyWithHashAlg, load_secret_key};
 
 #[derive(Debug, Error)]
 pub enum SshError {
@@ -25,6 +25,7 @@ struct ClientHandler;
 impl client::Handler for ClientHandler {
     type Error = russh::Error;
 
+    #[allow(clippy::manual_async_fn)]
     fn check_server_key(
         &mut self,
         _server_public_key: &ssh_key::PublicKey,
@@ -40,8 +41,8 @@ pub async fn send_passphrase(
     key_path: &Path,
     passphrase: &str,
 ) -> Result<(), SshError> {
-    let key = load_secret_key(key_path, None)
-        .map_err(|e| SshError::KeyLoadFailed(e.to_string()))?;
+    let key =
+        load_secret_key(key_path, None).map_err(|e| SshError::KeyLoadFailed(e.to_string()))?;
 
     let key_with_hash = PrivateKeyWithHashAlg::new(Arc::new(key), None);
 

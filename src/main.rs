@@ -1,4 +1,4 @@
-use actix_web::{web, App, HttpServer, HttpResponse, HttpRequest};
+use actix_web::{App, HttpRequest, HttpResponse, HttpServer, web};
 use articwake::{api, auth, config};
 use rust_embed::Embed;
 use tracing_actix_web::TracingLogger;

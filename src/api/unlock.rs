@@ -1,4 +1,4 @@
-use actix_web::{web, HttpRequest, HttpResponse};
+use actix_web::{HttpRequest, HttpResponse, web};
 use serde::Deserialize;
 
 use crate::auth::AppState;
@@ -46,7 +46,9 @@ pub async fn unlock(
         let error_msg = match e {
             PassphraseValidationError::Empty => "Passphrase cannot be empty",
             PassphraseValidationError::TooLong => "Passphrase too long",
-            PassphraseValidationError::ContainsControlChars => "Passphrase contains invalid characters",
+            PassphraseValidationError::ContainsControlChars => {
+                "Passphrase contains invalid characters"
+            }
         };
         return HttpResponse::BadRequest().json(serde_json::json!({
             "error": error_msg

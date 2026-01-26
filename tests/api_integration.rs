@@ -1,4 +1,4 @@
-use actix_web::{test, web, App};
+use actix_web::{App, test, web};
 use articwake::api;
 use articwake::auth::AppState;
 use articwake::config::Config;
@@ -20,8 +20,8 @@ fn create_test_config(pin_hash_path: PathBuf) -> Config {
 }
 
 fn create_pin_hash(pin: &str) -> NamedTempFile {
-    use argon2::password_hash::{rand_core::OsRng, PasswordHasher, SaltString};
     use argon2::Argon2;
+    use argon2::password_hash::{PasswordHasher, SaltString, rand_core::OsRng};
 
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();

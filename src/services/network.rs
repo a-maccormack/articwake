@@ -31,10 +31,10 @@ fn ping_host(ip: &str) -> bool {
 
 fn check_tcp_port(ip: &str, port: u16) -> bool {
     let addr = format!("{}:{}", ip, port);
-    if let Ok(mut addrs) = addr.to_socket_addrs() {
-        if let Some(addr) = addrs.next() {
-            return TcpStream::connect_timeout(&addr, Duration::from_secs(3)).is_ok();
-        }
+    if let Ok(mut addrs) = addr.to_socket_addrs()
+        && let Some(addr) = addrs.next()
+    {
+        return TcpStream::connect_timeout(&addr, Duration::from_secs(3)).is_ok();
     }
     false
 }

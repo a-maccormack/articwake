@@ -1,6 +1,6 @@
+use std::net::UdpSocket;
 use thiserror::Error;
 use wake_on_lan::MagicPacket;
-use std::net::UdpSocket;
 
 #[derive(Debug, Error)]
 pub enum WolError {
