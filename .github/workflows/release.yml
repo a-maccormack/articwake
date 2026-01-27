@@ -82,9 +82,125 @@ jobs:
           name: ${{ matrix.artifact }}
           path: artifacts/${{ matrix.artifact }}
 
+  build-aarch64-musl:
+    name: Build aarch64-unknown-linux-musl (static)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: |
+          rustup update stable
+          rustup default stable
+
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build static binary
+        run: cross build --release --target aarch64-unknown-linux-musl
+
+      - name: Verify static linking
+        run: |
+          file target/aarch64-unknown-linux-musl/release/articwake
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p artifacts
+          cp target/aarch64-unknown-linux-musl/release/articwake artifacts/articwake-aarch64-linux-musl
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: articwake-aarch64-linux-musl
+          path: artifacts/articwake-aarch64-linux-musl
+
+  build-alpine-image:
+    name: Build Alpine SD Card Image
+    runs-on: ubuntu-latest
+    needs: build-aarch64-musl
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download musl binary
+        uses: actions/download-artifact@v4
+        with:
+          name: articwake-aarch64-linux-musl
+          path: build/bin/
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y parted dosfstools
+
+      - name: Download Alpine base image
+        run: |
+          wget -q https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/aarch64/alpine-rpi-3.21.3-aarch64.tar.gz
+          wget -q https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/aarch64/alpine-rpi-3.21.3-aarch64.tar.gz.sha256
+          sha256sum -c alpine-rpi-3.21.3-aarch64.tar.gz.sha256
+
+      - name: Download headless bootstrap
+        run: |
+          wget -q https://github.com/macmpi/alpine-linux-headless-bootstrap/releases/latest/download/headless.apkovl.tar.gz
+
+      - name: Create SD card image
+        run: |
+          # Create 256MB image file
+          dd if=/dev/zero of=articwake-alpine-rpi.img bs=1M count=256
+
+          # Create partition table with single FAT32 partition
+          parted articwake-alpine-rpi.img --script \
+            mklabel msdos \
+            mkpart primary fat32 1MiB 100%
+
+          # Setup loop device
+          LOOP=$(sudo losetup -f --show -P articwake-alpine-rpi.img)
+          echo "LOOP=$LOOP" >> $GITHUB_ENV
+
+          # Format as FAT32
+          sudo mkfs.vfat -F 32 "${LOOP}p1"
+
+          # Mount and populate
+          sudo mkdir -p /mnt/sdcard
+          sudo mount "${LOOP}p1" /mnt/sdcard
+
+          # Extract Alpine base
+          sudo tar -xzf alpine-rpi-3.21.3-aarch64.tar.gz -C /mnt/sdcard
+
+          # Add headless bootstrap overlay
+          sudo cp headless.apkovl.tar.gz /mnt/sdcard/
+
+          # Add articwake binary
+          sudo mkdir -p /mnt/sdcard/articwake-bin
+          sudo cp build/bin/articwake-aarch64-linux-musl /mnt/sdcard/articwake-bin/articwake
+          sudo chmod 755 /mnt/sdcard/articwake-bin/articwake
+
+          # Add first-boot script and Pi config
+          sudo cp alpine-image/unattended.sh /mnt/sdcard/
+          sudo chmod 755 /mnt/sdcard/unattended.sh
+          sudo cp alpine-image/usercfg.txt /mnt/sdcard/
+
+          # Create articwake config directory with examples
+          sudo mkdir -p /mnt/sdcard/articwake
+          sudo cp alpine-image/config.env.example /mnt/sdcard/articwake/
+          sudo cp alpine-image/wifi.conf.example /mnt/sdcard/articwake/
+          sudo cp alpine-image/README.txt /mnt/sdcard/articwake/
+
+          # Cleanup
+          sudo umount /mnt/sdcard
+          sudo losetup -d "$LOOP"
+
+          # Compress image
+          gzip articwake-alpine-rpi.img
+
+      - name: Upload SD image
+        uses: actions/upload-artifact@v4
+        with:
+          name: articwake-alpine-rpi-image
+          path: articwake-alpine-rpi.img.gz
+
   release:
     name: Create Release
-    needs: [build-x86, build-arm]
+    needs: [build-x86, build-arm, build-aarch64-musl, build-alpine-image]
     runs-on: ubuntu-latest
     permissions:
       contents: write
