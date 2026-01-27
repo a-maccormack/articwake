@@ -138,9 +138,10 @@ jobs:
           wget -q https://dl-cdn.alpinelinux.org/alpine/v3.21/releases/aarch64/alpine-rpi-3.21.3-aarch64.tar.gz.sha256
           sha256sum -c alpine-rpi-3.21.3-aarch64.tar.gz.sha256
 
-      - name: Download headless bootstrap
+      - name: Build apkovl overlay
         run: |
-          wget -q https://github.com/macmpi/alpine-linux-headless-bootstrap/releases/latest/download/headless.apkovl.tar.gz
+          chmod +x alpine-image/build-overlay.sh
+          alpine-image/build-overlay.sh articwake.apkovl.tar.gz
 
       - name: Create SD card image
         run: |
@@ -166,17 +167,15 @@ jobs:
           # Extract Alpine base
           sudo tar -xzf alpine-rpi-3.21.3-aarch64.tar.gz -C /mnt/sdcard
 
-          # Add headless bootstrap overlay
-          sudo cp headless.apkovl.tar.gz /mnt/sdcard/
+          # Add our custom apkovl overlay (enables local service + setup script)
+          sudo cp articwake.apkovl.tar.gz /mnt/sdcard/
 
           # Add articwake binary
           sudo mkdir -p /mnt/sdcard/articwake-bin
           sudo cp build/bin/articwake-aarch64-linux-musl /mnt/sdcard/articwake-bin/articwake
           sudo chmod 755 /mnt/sdcard/articwake-bin/articwake
 
-          # Add first-boot script and Pi config
-          sudo cp alpine-image/unattended.sh /mnt/sdcard/
-          sudo chmod 755 /mnt/sdcard/unattended.sh
+          # Add Pi config
           sudo cp alpine-image/usercfg.txt /mnt/sdcard/
 
           # Create articwake config directory with examples
