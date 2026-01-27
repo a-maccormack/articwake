@@ -1,0 +1,23 @@
+# WiFi configuration for articwake
+# Copy this file to wifi.conf and fill in your network details
+# This uses wpa_supplicant format
+
+ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+update_config=1
+
+# Set your country code (important for WiFi regulatory compliance)
+country=US
+
+network={
+    ssid="YourNetworkName"
+    psk="YourNetworkPassword"
+    key_mgmt=WPA-PSK
+}
+
+# For multiple networks, add additional network={} blocks:
+# network={
+#     ssid="AnotherNetwork"
+#     psk="AnotherPassword"
+#     key_mgmt=WPA-PSK
+#     priority=1
+# }

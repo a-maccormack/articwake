@@ -1,0 +1,17 @@
+# Raspberry Pi Zero 2 W configuration for articwake
+# This file is read by the Pi bootloader
+
+# Enable 64-bit mode (required for aarch64 binary)
+arm_64bit=1
+
+# Minimize GPU memory (we don't need graphics)
+gpu_mem=16
+
+# Enable USB OTG (for optional USB gadget mode)
+dtoverlay=dwc2
+
+# Enable serial console (useful for debugging)
+enable_uart=1
+
+# Disable kernel Bluetooth initialization (handled by brcmfmac)
+dtparam=krnbt=off
