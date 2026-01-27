@@ -23,8 +23,8 @@ async fn serve_static(req: HttpRequest) -> HttpResponse {
 }
 
 fn hash_pin() -> anyhow::Result<()> {
-    use argon2::password_hash::{rand_core::OsRng, PasswordHasher, SaltString};
     use argon2::Argon2;
+    use argon2::password_hash::{PasswordHasher, SaltString, rand_core::OsRng};
     use std::io::{self, BufRead};
 
     let stdin = io::stdin();
