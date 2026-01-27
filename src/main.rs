@@ -22,8 +22,39 @@ async fn serve_static(req: HttpRequest) -> HttpResponse {
     }
 }
 
+fn hash_pin() -> anyhow::Result<()> {
+    use argon2::password_hash::{rand_core::OsRng, PasswordHasher, SaltString};
+    use argon2::Argon2;
+    use std::io::{self, BufRead};
+
+    let stdin = io::stdin();
+    let pin = stdin
+        .lock()
+        .lines()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("No input provided"))??;
+    let pin = pin.trim();
+
+    if pin.is_empty() {
+        anyhow::bail!("PIN cannot be empty");
+    }
+
+    let salt = SaltString::generate(&mut OsRng);
+    let hash = Argon2::default()
+        .hash_password(pin.as_bytes(), &salt)
+        .map_err(|e| anyhow::anyhow!("Failed to hash PIN: {}", e))?;
+
+    println!("{}", hash);
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Handle hash-pin subcommand before any other initialization
+    if let Some("hash-pin") = std::env::args().nth(1).as_deref() {
+        return hash_pin();
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::from_default_env()
