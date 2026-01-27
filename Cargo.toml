@@ -10,7 +10,7 @@ default-run = "articwake"
 actix-web = "4"
 actix-files = "0.6"
 tokio = { version = "1", features = ["full"] }
-russh = "0.57"
+russh = { version = "0.57", default-features = false, features = ["ring", "flate2"] }
 russh-keys = "0.49"
 wake-on-lan = "0.2"
 argon2 = "0.5"
