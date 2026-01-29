@@ -70,7 +70,7 @@ sudo umount /mnt
 
 1. Insert SD card into Pi Zero 2 W and power on
 2. Wait ~2-3 minutes for first boot setup
-3. Access the web UI at `http://<pi-ip>:8080` or via Tailscale
+3. Access the web UI at `http://<pi-ip>` or via Tailscale
 
 ## Manual Installation
 
@@ -90,7 +90,7 @@ Set these environment variables:
 | Variable                      | Required | Default                       | Description                         |
 | ----------------------------- | -------- | ----------------------------- | ----------------------------------- |
 | `ARTICWAKE_BIND_HOST`         | No       | `127.0.0.1`                   | Bind address                        |
-| `ARTICWAKE_PORT`              | No       | `8080`                        | HTTP port                           |
+| `ARTICWAKE_PORT`              | No       | `80`                          | HTTP port                           |
 | `ARTICWAKE_HOMELAB_MAC`       | **Yes**  | -                             | Target server MAC address           |
 | `ARTICWAKE_HOMELAB_IP`        | **Yes**  | -                             | Target server IP (Tailscale or LAN) |
 | `ARTICWAKE_HOMELAB_BROADCAST` | No       | `255.255.255.255`             | WOL broadcast address               |
@@ -161,12 +161,12 @@ Download from [GitHub Releases](https://github.com/a-maccormack/articwake/releas
 
 ```bash
 # Get token
-curl -X POST http://localhost:8080/api/auth \
+curl -X POST http://localhost/api/auth \
   -H "Content-Type: application/json" \
   -d '{"pin": "your-pin"}'
 
 # Use token
-curl http://localhost:8080/api/status \
+curl http://localhost/api/status \
   -H "Authorization: Bearer <token>"
 ```
 

@@ -37,7 +37,7 @@ impl Config {
         Ok(Config {
             bind_host: env::var("ARTICWAKE_BIND_HOST").unwrap_or_else(|_| "127.0.0.1".to_string()),
             port: env::var("ARTICWAKE_PORT")
-                .unwrap_or_else(|_| "8080".to_string())
+                .unwrap_or_else(|_| "80".to_string())
                 .parse()
                 .map_err(|_| ConfigError::InvalidPort("ARTICWAKE_PORT".to_string()))?,
             homelab_mac: {

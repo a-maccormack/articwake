@@ -178,6 +178,10 @@ jobs:
           # Add Pi config
           sudo cp alpine-image/usercfg.txt /mnt/sdcard/
 
+          # Configure Alpine to load our apkovl overlay on boot
+          # Append to cmdline.txt so Alpine finds the overlay
+          echo -n " apkovl=articwake.apkovl.tar.gz" | sudo tee -a /mnt/sdcard/cmdline.txt
+
           # Create articwake config directory with examples
           sudo mkdir -p /mnt/sdcard/articwake
           sudo cp alpine-image/config.env.example /mnt/sdcard/articwake/
