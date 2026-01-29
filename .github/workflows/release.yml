@@ -141,7 +141,7 @@ jobs:
       - name: Build apkovl overlay
         run: |
           chmod +x alpine-image/build-overlay.sh
-          alpine-image/build-overlay.sh articwake.apkovl.tar.gz
+          alpine-image/build-overlay.sh localhost.apkovl.tar.gz
 
       - name: Create SD card image
         run: |
@@ -168,7 +168,7 @@ jobs:
           sudo tar -xzf alpine-rpi-3.21.3-aarch64.tar.gz -C /mnt/sdcard
 
           # Add our custom apkovl overlay (enables local service + setup script)
-          sudo cp articwake.apkovl.tar.gz /mnt/sdcard/
+          sudo cp localhost.apkovl.tar.gz /mnt/sdcard/
 
           # Add articwake binary
           sudo mkdir -p /mnt/sdcard/articwake-bin
@@ -180,7 +180,7 @@ jobs:
 
           # Configure Alpine to load our apkovl overlay on boot
           # Append to cmdline.txt so Alpine finds the overlay
-          echo -n " apkovl=articwake.apkovl.tar.gz" | sudo tee -a /mnt/sdcard/cmdline.txt
+          echo -n " apkovl=localhost.apkovl.tar.gz" | sudo tee -a /mnt/sdcard/cmdline.txt
 
           # Create articwake config directory with examples
           sudo mkdir -p /mnt/sdcard/articwake
