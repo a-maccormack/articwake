@@ -84,8 +84,8 @@ ACCESS:
 --------------------------------------------------------------------------------
 
 After first boot, access the web UI at:
-- Local: http://<pi-ip>:8080
-- Tailscale: http://<tailscale-hostname>:8080
+- Local: http://<pi-ip>
+- Tailscale: http://<tailscale-hostname>
 
 Find the Pi's IP address:
 - Check your router's DHCP leases

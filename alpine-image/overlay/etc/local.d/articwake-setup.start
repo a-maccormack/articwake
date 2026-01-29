@@ -1,146 +1,352 @@
 #!/bin/sh
-# articwake first-boot configuration script
-# Runs via OpenRC local.d on first boot
+# articwake boot configuration script
+# Optimized for fast boot with optional debug mode
 
-set -e
-
-BOOT_DIR="/media/mmcblk0p1"
-ARTICWAKE_CONF="$BOOT_DIR/articwake"
+# ============================================
+# CONFIGURATION
+# ============================================
 ARTICWAKE_BIN="/usr/local/bin/articwake"
-ARTICWAKE_DATA="/var/lib/articwake"
-ARTICWAKE_SECRETS="/etc/articwake"
-LOG_FILE="/var/log/articwake-setup.log"
 
+# Find boot partition
+BOOT_DIR=""
+for dir in /media/mmcblk0p1 /boot /mnt; do
+    [ -f "$dir/articwake/config.env.example" ] && BOOT_DIR="$dir" && break
+done
+
+# Mount if not found
+if [ -z "$BOOT_DIR" ]; then
+    mkdir -p /media/mmcblk0p1
+    mount -o rw /dev/mmcblk0p1 /media/mmcblk0p1 2>/dev/null || \
+    mount -t vfat -o rw /dev/mmcblk0p1 /media/mmcblk0p1 2>/dev/null || true
+    [ -f "/media/mmcblk0p1/articwake/config.env.example" ] && BOOT_DIR="/media/mmcblk0p1"
+fi
+
+mount -o remount,rw "$BOOT_DIR" 2>/dev/null || true
+
+# Paths
+ARTICWAKE_CONF="$BOOT_DIR/articwake"
+BOOT_LOG="$BOOT_DIR/articwake/setup.log"
+ARTICWAKE_DATA="$BOOT_DIR/articwake/data"
+ARTICWAKE_SECRETS="$BOOT_DIR/articwake/secrets"
+TS_CACHE_DIR="$BOOT_DIR/articwake/tailscale-pkgs"
+TS_STATE_DIR="$BOOT_DIR/articwake/tailscale-state"
+
+# Debug mode - create articwake/debug file to enable verbose logging
+DEBUG_MODE=""
+[ -f "$ARTICWAKE_CONF/debug" ] && DEBUG_MODE="yes"
+
+# First boot detection
+FIRST_BOOT="no"
+[ ! -f "$ARTICWAKE_DATA/.setup-complete" ] && FIRST_BOOT="yes"
+
+# ============================================
+# LOGGING FUNCTIONS
+# ============================================
 log() {
-    echo "[articwake-setup] $(date '+%Y-%m-%d %H:%M:%S') $1" | tee -a "$LOG_FILE"
+    echo "[articwake] $(date '+%H:%M:%S') $1" >> "$BOOT_LOG" 2>/dev/null
 }
 
+debug_log() {
+    [ "$DEBUG_MODE" = "yes" ] && log "[DEBUG] $1"
+}
+
+checkpoint() {
+    log "$1"
+    sync
+}
+
+# Initialize log
+echo "=== articwake boot $(date) ===" > "$BOOT_LOG" 2>/dev/null
+log "BOOT_DIR=$BOOT_DIR FIRST_BOOT=$FIRST_BOOT DEBUG=$DEBUG_MODE"
+
+# ============================================
+# HELPER FUNCTIONS
+# ============================================
 die() {
-    log "ERROR: $1"
+    checkpoint "FATAL: $1"
     exit 1
 }
 
-# Check if already configured
-if [ -f "$ARTICWAKE_DATA/.setup-complete" ]; then
-    log "Setup already complete, skipping"
-    exit 0
-fi
+# Smart wait with fast initial phase
+wait_for() {
+    local check_cmd="$1"
+    local desc="$2"
+    local fast_count="${3:-10}"
+    local slow_count="${4:-10}"
 
-log "========================================="
-log "Starting articwake first-boot setup"
-log "========================================="
+    # Fast phase: quick checks
+    for i in $(seq 1 $fast_count); do
+        eval "$check_cmd" && return 0
+        sleep 0.5
+    done
 
-# Verify required configuration files exist
-log "Checking required configuration files..."
-missing=""
-for file in config.env wifi.conf ssh_key pin; do
-    if [ ! -f "$ARTICWAKE_CONF/$file" ]; then
-        missing="$missing $file"
+    # Slow phase: if fast failed
+    debug_log "$desc not ready, entering slow retry phase"
+    for i in $(seq 1 $slow_count); do
+        eval "$check_cmd" && return 0
+        sleep 2
+    done
+
+    return 1
+}
+
+# ============================================
+# ENSURE KERNEL MODULES
+# ============================================
+ensure_modules() {
+    local KVER=$(uname -r)
+
+    # Fast path - check if modules already available
+    if [ -d "/lib/modules/$KVER" ]; then
+        debug_log "Modules already available for $KVER"
+        return 0
     fi
-done
 
-if [ -n "$missing" ]; then
-    die "Missing required files in /boot/articwake/:$missing"
-fi
+    log "Loading kernel modules..."
 
-log "All required files present"
-
-# Install required packages
-log "Installing required packages..."
-apk update
-apk add iputils wpa_supplicant dhcpcd
-
-# Install Tailscale if auth key provided
-if [ -f "$ARTICWAKE_CONF/tailscale_authkey" ]; then
-    log "Tailscale auth key found, installing Tailscale..."
-    apk add tailscale
-fi
-
-# Configure WiFi
-log "Configuring WiFi..."
-mkdir -p /etc/wpa_supplicant
-cp "$ARTICWAKE_CONF/wifi.conf" /etc/wpa_supplicant/wpa_supplicant.conf
-chmod 600 /etc/wpa_supplicant/wpa_supplicant.conf
-
-cat > /etc/network/interfaces <<EOF
-auto lo
-iface lo inet loopback
-
-auto wlan0
-iface wlan0 inet dhcp
-EOF
-
-rc-update add wpa_supplicant default
-rc-update add dhcpcd default
-rc-service wpa_supplicant start || log "Warning: wpa_supplicant start failed"
-rc-service dhcpcd start || log "Warning: dhcpcd start failed"
-
-# Wait for network
-log "Waiting for network connectivity..."
-retries=30
-while [ $retries -gt 0 ]; do
-    if ping -c 1 -W 2 1.1.1.1 >/dev/null 2>&1; then
-        log "Network connected!"
-        break
+    # Start modloop service if needed
+    if [ ! -d "/.modloop" ] && [ -x /etc/init.d/modloop ]; then
+        debug_log "Starting modloop service"
+        /etc/init.d/modloop start >> "$BOOT_LOG" 2>&1 || true
     fi
-    retries=$((retries - 1))
+
+    # Verify modules loaded
+    if [ -d "/lib/modules/$KVER" ]; then
+        debug_log "Modules loaded successfully"
+        return 0
+    fi
+
+    # Manual fix if needed
+    if [ -d "/lib/modules/modules/$KVER" ]; then
+        debug_log "Creating bind mount for modules"
+        mount --bind "/lib/modules/modules/$KVER" "/lib/modules/$KVER" 2>/dev/null || true
+    fi
+
+    [ -d "/lib/modules/$KVER" ] && return 0
+
+    log "WARNING: Kernel modules not found for $KVER"
+    return 1
+}
+
+# ============================================
+# WIFI SETUP
+# ============================================
+setup_wifi() {
+    log "Configuring WiFi..."
+
+    # Copy wifi config
+    mkdir -p /etc/wpa_supplicant
+    cp "$ARTICWAKE_CONF/wifi.conf" /etc/wpa_supplicant/wpa_supplicant.conf
+    chmod 600 /etc/wpa_supplicant/wpa_supplicant.conf
+
+    # Debug only - don't log credentials normally
+    [ "$DEBUG_MODE" = "yes" ] && cat "$ARTICWAKE_CONF/wifi.conf" >> "$BOOT_LOG" 2>&1
+
+    # Load WiFi module
+    modprobe brcmfmac >> "$BOOT_LOG" 2>&1 || true
+
+    # Install wpa_supplicant from local cache if needed
+    if ! command -v wpa_supplicant >/dev/null 2>&1; then
+        debug_log "Installing wpa_supplicant from local apks"
+        local WPA_PKG=$(find "$BOOT_DIR/apks" -name "wpa_supplicant*.apk" 2>/dev/null | head -1)
+        local LIBNL_PKG=$(find "$BOOT_DIR/apks" -name "libnl3-3*.apk" 2>/dev/null | head -1)
+        local DBUS_PKG=$(find "$BOOT_DIR/apks" -name "dbus-libs*.apk" 2>/dev/null | head -1)
+        local NCURSES_PKG=$(find "$BOOT_DIR/apks" -name "libncursesw*.apk" 2>/dev/null | head -1)
+
+        local PKGS=""
+        [ -n "$NCURSES_PKG" ] && PKGS="$PKGS $NCURSES_PKG"
+        [ -n "$LIBNL_PKG" ] && PKGS="$PKGS $LIBNL_PKG"
+        [ -n "$DBUS_PKG" ] && PKGS="$PKGS $DBUS_PKG"
+        [ -n "$WPA_PKG" ] && PKGS="$PKGS $WPA_PKG"
+
+        [ -n "$PKGS" ] && apk add --force-non-repository --no-network --allow-untrusted $PKGS >> "$BOOT_LOG" 2>&1
+    fi
+
+    # Wait for wlan0 interface
+    if ! wait_for "ip link show wlan0 >/dev/null 2>&1" "wlan0" 10 10; then
+        die "WiFi interface not found"
+    fi
+    debug_log "wlan0 interface found"
+
+    # Bring up interface and start wpa_supplicant
+    ip link set wlan0 up >> "$BOOT_LOG" 2>&1
+
+    if command -v wpa_supplicant >/dev/null 2>&1; then
+        killall wpa_supplicant 2>/dev/null || true
+        wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant/wpa_supplicant.conf >> "$BOOT_LOG" 2>&1
+    fi
+
     sleep 2
-done
 
-# Setup articwake
-log "Setting up articwake..."
-mkdir -p "$ARTICWAKE_DATA"
-mkdir -p "$ARTICWAKE_SECRETS"
-chmod 700 "$ARTICWAKE_SECRETS"
+    # Get IP address
+    udhcpc -i wlan0 -n -q >> "$BOOT_LOG" 2>&1 || true
 
-# Install binary
-if [ -f "$BOOT_DIR/articwake-bin/articwake" ]; then
-    cp "$BOOT_DIR/articwake-bin/articwake" "$ARTICWAKE_BIN"
-    chmod 755 "$ARTICWAKE_BIN"
-    log "Binary installed to $ARTICWAKE_BIN"
-else
-    die "Binary not found at $BOOT_DIR/articwake-bin/articwake"
-fi
+    # Wait for network connectivity
+    if ! wait_for "ping -c 1 -W 1 1.1.1.1 >/dev/null 2>&1" "network" 10 15; then
+        # Retry DHCP and check again
+        udhcpc -i wlan0 -n -q >> "$BOOT_LOG" 2>&1 || true
+        if ! ping -c 1 -W 2 1.1.1.1 >/dev/null 2>&1; then
+            die "Network connectivity failed"
+        fi
+    fi
 
-# Copy SSH key
-cp "$ARTICWAKE_CONF/ssh_key" "$ARTICWAKE_SECRETS/ssh_key"
-chmod 600 "$ARTICWAKE_SECRETS/ssh_key"
-log "SSH key installed"
+    checkpoint "WiFi connected"
+}
 
-# Hash PIN
-log "Hashing PIN..."
-PIN=$(cat "$ARTICWAKE_CONF/pin")
-if [ -z "$PIN" ]; then
-    die "PIN file is empty"
-fi
-echo -n "$PIN" | "$ARTICWAKE_BIN" hash-pin > "$ARTICWAKE_DATA/pin.hash"
-chmod 600 "$ARTICWAKE_DATA/pin.hash"
-log "PIN hashed and stored"
+# ============================================
+# TIME SYNC
+# ============================================
+sync_time() {
+    debug_log "Current time: $(date)"
 
-# Create environment file
-cat > /etc/conf.d/articwake <<EOF
-# articwake configuration - generated on first boot
+    # Quick check - if time looks reasonable, skip
+    local YEAR=$(date +%Y)
+    if [ "$YEAR" -ge 2025 ]; then
+        debug_log "Time already reasonable ($YEAR)"
+        return 0
+    fi
+
+    log "Syncing time..."
+
+    # Install chrony from local apks if available
+    local CHRONY_PKG=$(find "$BOOT_DIR/apks" -name "chrony-[0-9]*.apk" 2>/dev/null | head -1)
+    if [ -n "$CHRONY_PKG" ]; then
+        apk add --force-non-repository --no-network --allow-untrusted "$CHRONY_PKG" >> "$BOOT_LOG" 2>&1
+        rc-service chronyd start >> "$BOOT_LOG" 2>&1 || true
+        chronyc makestep >> "$BOOT_LOG" 2>&1 || true
+        sleep 3
+    else
+        # Fallback to busybox ntpd
+        ntpd -n -q -p pool.ntp.org >> "$BOOT_LOG" 2>&1 || \
+        ntpd -n -q -p time.google.com >> "$BOOT_LOG" 2>&1 || true
+    fi
+
+    # Verify
+    YEAR=$(date +%Y)
+    if [ "$YEAR" -lt 2025 ]; then
+        log "WARNING: Time sync may have failed (year=$YEAR)"
+    else
+        debug_log "Time synced: $(date)"
+    fi
+}
+
+# ============================================
+# TAILSCALE SETUP
+# ============================================
+setup_tailscale() {
+    [ ! -f "$ARTICWAKE_CONF/tailscale_authkey" ] && return 0
+
+    log "Setting up Tailscale..."
+
+    # Set hostname
+    echo "articwake" > /etc/hostname
+    hostname articwake
+
+    # Install Tailscale
+    if ! command -v tailscale >/dev/null 2>&1; then
+        if [ -d "$TS_CACHE_DIR" ] && ls "$TS_CACHE_DIR"/*.apk >/dev/null 2>&1; then
+            # Install from cache - NO apk update needed
+            debug_log "Installing Tailscale from cache"
+            apk add --force-non-repository --no-network --allow-untrusted "$TS_CACHE_DIR"/*.apk >> "$BOOT_LOG" 2>&1
+        else
+            # Download and cache
+            log "Downloading Tailscale (first boot)..."
+
+            # Ensure community repo
+            if ! grep -q "community" /etc/apk/repositories 2>/dev/null; then
+                local ALPINE_VERSION=$(cat /etc/alpine-release | cut -d. -f1,2)
+                echo "https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/community" >> /etc/apk/repositories
+            fi
+
+            apk update >> "$BOOT_LOG" 2>&1
+            mkdir -p "$TS_CACHE_DIR"
+            apk fetch --recursive --output "$TS_CACHE_DIR" tailscale >> "$BOOT_LOG" 2>&1
+            apk add --force-non-repository --no-network --allow-untrusted "$TS_CACHE_DIR"/*.apk >> "$BOOT_LOG" 2>&1
+        fi
+    fi
+
+    # Ensure TUN device
+    modprobe tun >> "$BOOT_LOG" 2>&1 || true
+    [ ! -d /dev/net ] && mkdir -p /dev/net
+    [ ! -c /dev/net/tun ] && mknod /dev/net/tun c 10 200 && chmod 600 /dev/net/tun
+
+    # Start tailscaled
+    if ! pgrep tailscaled >/dev/null 2>&1; then
+        mkdir -p "$TS_STATE_DIR" /var/run/tailscale
+
+        tailscaled --state="$TS_STATE_DIR/tailscaled.state" \
+                   --socket=/var/run/tailscale/tailscaled.sock >> /var/log/tailscaled.log 2>&1 &
+
+        # Wait for daemon
+        sleep 2
+        if ! pgrep tailscaled >/dev/null 2>&1; then
+            log "WARNING: tailscaled failed to start"
+            [ "$DEBUG_MODE" = "yes" ] && cat /var/log/tailscaled.log >> "$BOOT_LOG" 2>&1
+            return 1
+        fi
+    fi
+
+    # Check if already authenticated
+    local TS_STATUS=$(tailscale status --json 2>/dev/null | grep -o '"BackendState":"[^"]*"' | cut -d'"' -f4)
+
+    if [ "$TS_STATUS" = "Running" ]; then
+        debug_log "Tailscale already authenticated"
+    else
+        debug_log "Authenticating Tailscale..."
+        local TS_AUTHKEY=$(cat "$ARTICWAKE_CONF/tailscale_authkey")
+        tailscale up --authkey="$TS_AUTHKEY" --ssh >> "$BOOT_LOG" 2>&1
+    fi
+
+    # Log status
+    local TS_IP=$(tailscale ip -4 2>/dev/null)
+    [ -n "$TS_IP" ] && log "Tailscale connected: $TS_IP" || log "WARNING: Tailscale not connected"
+}
+
+# ============================================
+# ARTICWAKE SETUP
+# ============================================
+setup_articwake() {
+    log "Setting up articwake..."
+
+    mkdir -p "$ARTICWAKE_DATA" "$ARTICWAKE_SECRETS"
+    chmod 700 "$ARTICWAKE_SECRETS"
+
+    # Install binary
+    if [ -f "$BOOT_DIR/articwake-bin/articwake" ]; then
+        cp "$BOOT_DIR/articwake-bin/articwake" "$ARTICWAKE_BIN"
+        chmod 755 "$ARTICWAKE_BIN"
+    else
+        die "articwake binary not found"
+    fi
+
+    # Copy SSH key
+    cp "$ARTICWAKE_CONF/ssh_key" "$ARTICWAKE_SECRETS/ssh_key"
+    chmod 600 "$ARTICWAKE_SECRETS/ssh_key"
+
+    # Hash PIN - first boot only
+    if [ "$FIRST_BOOT" = "yes" ]; then
+        debug_log "Hashing PIN (first boot)"
+        local PIN=$(cat "$ARTICWAKE_CONF/pin")
+        [ -z "$PIN" ] && die "PIN file is empty"
+        echo -n "$PIN" | "$ARTICWAKE_BIN" hash-pin > "$ARTICWAKE_DATA/pin.hash"
+        chmod 600 "$ARTICWAKE_DATA/pin.hash"
+
+        # Securely delete PIN
+        dd if=/dev/urandom of="$ARTICWAKE_CONF/pin" bs=1k count=10 2>/dev/null || true
+        rm -f "$ARTICWAKE_CONF/pin"
+    fi
+
+    # Create environment file
+    cat > /etc/conf.d/articwake <<EOF
 . $ARTICWAKE_CONF/config.env
 export ARTICWAKE_SSH_KEY_PATH="$ARTICWAKE_SECRETS/ssh_key"
 export ARTICWAKE_PIN_HASH_PATH="$ARTICWAKE_DATA/pin.hash"
 EOF
-chmod 600 /etc/conf.d/articwake
+    chmod 600 /etc/conf.d/articwake
 
-# Setup Tailscale if auth key provided
-if [ -f "$ARTICWAKE_CONF/tailscale_authkey" ]; then
-    log "Configuring Tailscale..."
-    rc-update add tailscaled default
-    rc-service tailscaled start
-    sleep 5
-    TS_AUTHKEY=$(cat "$ARTICWAKE_CONF/tailscale_authkey")
-    tailscale up --authkey="$TS_AUTHKEY" --ssh 2>&1 | tee -a "$LOG_FILE" || log "Warning: Tailscale auth may have failed"
-fi
-
-# Create OpenRC service
-log "Creating articwake service..."
-cat > /etc/init.d/articwake <<'SERVICEEOF'
+    # Create service
+    cat > /etc/init.d/articwake <<'SERVICEEOF'
 #!/sbin/openrc-run
-
 name="articwake"
 description="Wake-on-LAN and LUKS unlock service"
 command="/usr/local/bin/articwake"
@@ -150,44 +356,73 @@ output_log="/var/log/articwake.log"
 error_log="/var/log/articwake.log"
 
 depend() {
-    need net
-    after tailscaled
+    after localmount
+    use net
 }
 
 start_pre() {
-    if [ -f /etc/conf.d/articwake ]; then
-        . /etc/conf.d/articwake
-    fi
+    [ -f /etc/conf.d/articwake ] && . /etc/conf.d/articwake
     export ARTICWAKE_BIND_HOST="${ARTICWAKE_BIND_HOST:-0.0.0.0}"
-    export ARTICWAKE_PORT="${ARTICWAKE_PORT:-8080}"
-    export ARTICWAKE_HOMELAB_MAC
-    export ARTICWAKE_HOMELAB_IP
+    export ARTICWAKE_PORT="${ARTICWAKE_PORT:-80}"
+    export ARTICWAKE_HOMELAB_MAC ARTICWAKE_HOMELAB_IP
     export ARTICWAKE_HOMELAB_BROADCAST="${ARTICWAKE_HOMELAB_BROADCAST:-255.255.255.255}"
     export ARTICWAKE_SSH_PORT="${ARTICWAKE_SSH_PORT:-2222}"
-    export ARTICWAKE_SSH_KEY_PATH
-    export ARTICWAKE_PIN_HASH_PATH
+    export ARTICWAKE_SSH_KEY_PATH ARTICWAKE_PIN_HASH_PATH
 }
 SERVICEEOF
-chmod 755 /etc/init.d/articwake
-rc-update add articwake default
+    chmod 755 /etc/init.d/articwake
+    rc-update add articwake default >> "$BOOT_LOG" 2>&1 || true
+}
 
-# Securely delete sensitive files
-log "Securely deleting sensitive plaintext files..."
-for file in pin ssh_key tailscale_authkey; do
-    if [ -f "$ARTICWAKE_CONF/$file" ]; then
-        dd if=/dev/urandom of="$ARTICWAKE_CONF/$file" bs=1k count=10 2>/dev/null || true
-        sync
-        rm -f "$ARTICWAKE_CONF/$file"
-        log "Deleted $file"
+# ============================================
+# START SERVICES
+# ============================================
+start_services() {
+    log "Starting services..."
+
+    # Start articwake
+    if ! rc-service articwake start >> "$BOOT_LOG" 2>&1; then
+        debug_log "rc-service failed, starting directly"
+        . /etc/conf.d/articwake
+        export ARTICWAKE_BIND_HOST="${ARTICWAKE_BIND_HOST:-0.0.0.0}"
+        export ARTICWAKE_PORT="${ARTICWAKE_PORT:-80}"
+        export ARTICWAKE_SSH_KEY_PATH ARTICWAKE_PIN_HASH_PATH
+        /usr/local/bin/articwake >> /var/log/articwake.log 2>&1 &
     fi
-done
 
-# Mark complete and start service
-touch "$ARTICWAKE_DATA/.setup-complete"
-log "First-boot setup complete!"
+    sleep 1
+    if pgrep -f articwake >/dev/null; then
+        log "articwake running"
+    else
+        log "WARNING: articwake may not be running"
+    fi
+}
 
-rc-service articwake start
+# ============================================
+# MAIN
+# ============================================
 
-log "========================================="
-log "articwake is now running!"
-log "========================================="
+# Validate required files
+if [ "$FIRST_BOOT" = "yes" ]; then
+    for f in config.env wifi.conf ssh_key pin; do
+        [ ! -f "$ARTICWAKE_CONF/$f" ] && die "Missing: $f"
+    done
+else
+    for f in config.env wifi.conf ssh_key; do
+        [ ! -f "$ARTICWAKE_CONF/$f" ] && die "Missing: $f"
+    done
+    [ ! -f "$ARTICWAKE_DATA/pin.hash" ] && die "Missing: pin.hash"
+fi
+
+# Run setup
+ensure_modules
+setup_wifi
+sync_time
+setup_tailscale
+setup_articwake
+start_services
+
+# Mark first boot complete
+[ "$FIRST_BOOT" = "yes" ] && touch "$ARTICWAKE_DATA/.setup-complete"
+
+checkpoint "=== Boot complete ==="

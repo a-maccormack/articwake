@@ -1,0 +1,29 @@
+#!/sbin/openrc-run
+
+description="Articwake first-boot setup"
+
+depend() {
+    need localmount
+    after modules hwdrivers
+    before local
+}
+
+start() {
+    ebegin "Running articwake first-boot setup"
+
+    # Mount boot partition read-write
+    mkdir -p /media/mmcblk0p1
+    mount -o remount,rw /media/mmcblk0p1 2>/dev/null || \
+    mount -o rw /dev/mmcblk0p1 /media/mmcblk0p1 2>/dev/null || true
+
+    # Debug log
+    echo "init.d script ran at $(date)" > /media/mmcblk0p1/articwake/initd-debug.log
+    sync
+
+    # Run actual setup
+    if [ -x /etc/local.d/articwake-setup.start ]; then
+        /etc/local.d/articwake-setup.start >> /media/mmcblk0p1/articwake/initd-debug.log 2>&1
+    fi
+
+    eend $?
+}
