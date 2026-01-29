@@ -173,6 +173,11 @@ setup_wifi() {
 
     if command -v wpa_supplicant >/dev/null 2>&1; then
         killall wpa_supplicant 2>/dev/null || true
+        # Wait for process to actually terminate
+        while pgrep wpa_supplicant >/dev/null 2>&1; do
+            sleep 0.1
+        done
+        rm -f /var/run/wpa_supplicant/wlan0
         wpa_supplicant -B -i wlan0 -c /etc/wpa_supplicant/wpa_supplicant.conf >> "$BOOT_LOG" 2>&1
     fi
 
