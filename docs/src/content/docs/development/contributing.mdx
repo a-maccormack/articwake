@@ -1,0 +1,203 @@
+---
+title: Contributing
+description: Guidelines for contributing to articwake.
+---
+
+Contributions are welcome! This guide covers how to contribute to articwake.
+
+## Getting Started
+
+1. Fork the repository on GitHub
+2. Clone your fork:
+   ```bash
+   git clone https://github.com/YOUR-USERNAME/articwake.git
+   cd articwake
+   ```
+3. Create a branch:
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+## Development Setup
+
+### Requirements
+
+- Rust 1.85+ (edition 2024)
+- Docker (for cross-compilation)
+
+### Building
+
+```bash
+cargo build
+```
+
+### Running Tests
+
+```bash
+cargo test
+```
+
+### Linting
+
+```bash
+cargo clippy -- -D warnings
+cargo fmt -- --check
+```
+
+## Code Style
+
+### Formatting
+
+All code must be formatted with `rustfmt`:
+
+```bash
+cargo fmt
+```
+
+### Linting
+
+All clippy warnings must be resolved:
+
+```bash
+cargo clippy -- -D warnings
+```
+
+### Naming Conventions
+
+- Modules: `snake_case`
+- Functions: `snake_case`
+- Types: `PascalCase`
+- Constants: `SCREAMING_SNAKE_CASE`
+
+### Error Handling
+
+Use `thiserror` for custom error types:
+
+```rust
+#[derive(Debug, Error)]
+pub enum MyError {
+    #[error("Something went wrong: {0}")]
+    SomethingFailed(String),
+}
+```
+
+## Pull Request Process
+
+1. **Ensure tests pass**: `cargo test`
+2. **Ensure linting passes**: `cargo clippy -- -D warnings`
+3. **Ensure formatting**: `cargo fmt`
+4. **Write descriptive commits**: Explain what and why
+5. **Open a PR**: Describe changes and motivation
+
+### PR Title Format
+
+Use conventional commit style:
+
+- `feat: add new feature`
+- `fix: resolve bug in X`
+- `docs: update README`
+- `refactor: restructure module Y`
+- `test: add tests for Z`
+
+### PR Description
+
+Include:
+- What changes were made
+- Why the changes were made
+- How to test the changes
+- Any breaking changes
+
+## Testing Guidelines
+
+### Unit Tests
+
+Add tests for new functionality:
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_function() {
+        // Arrange
+        let input = "test";
+
+        // Act
+        let result = new_function(input);
+
+        // Assert
+        assert!(result.is_ok());
+    }
+}
+```
+
+### Coverage
+
+Aim to test:
+- Happy path
+- Edge cases
+- Error conditions
+
+## Documentation
+
+### Code Comments
+
+Comment complex logic, not obvious code:
+
+```rust
+// BAD: Increments counter
+counter += 1;
+
+// GOOD: Rate limit window resets after 60 seconds
+if elapsed > RATE_LIMIT_WINDOW {
+    entry.attempts.clear();
+}
+```
+
+### Doc Comments
+
+Add doc comments for public APIs:
+
+```rust
+/// Validates a MAC address format.
+///
+/// Accepts colon-separated, dash-separated, or no separator.
+///
+/// # Examples
+///
+/// ```
+/// assert!(validate_mac("aa:bb:cc:dd:ee:ff").is_ok());
+/// ```
+pub fn validate_mac(mac: &str) -> Result<(), ConfigError> {
+    // ...
+}
+```
+
+## Areas for Contribution
+
+### Good First Issues
+
+- Improve error messages
+- Add more unit tests
+- Documentation improvements
+- Code comments
+
+### Feature Ideas
+
+- Additional status checks
+- Webhook notifications
+- Multiple server support
+- Audit logging
+
+### Bug Fixes
+
+Check the [issue tracker](https://github.com/a-maccormack/articwake/issues) for reported bugs.
+
+## License
+
+By contributing, you agree that your contributions will be licensed under the MIT License.
+
+## Questions?
+
+Open an issue for questions or discussion before starting large changes.

@@ -1,0 +1,112 @@
+---
+title: Web UI Usage
+description: Using the articwake web interface.
+---
+
+articwake includes a responsive, mobile-friendly web interface for managing your homelab server.
+
+## Accessing the UI
+
+Open your browser and navigate to:
+
+- Local network: `http://<pi-ip>`
+- Tailscale: `http://<tailscale-hostname>`
+
+## Authentication
+
+### Login
+
+1. Enter your PIN in the login form
+2. Click "Login"
+3. You'll receive a session token valid for 15 minutes
+
+### Session Expiry
+
+Sessions expire after 15 minutes of inactivity. You'll be prompted to log in again.
+
+### Rate Limiting
+
+To prevent brute-force attacks, login attempts are limited to 10 per minute per IP address. If rate limited, wait 60 seconds before trying again.
+
+## Status Display
+
+After logging in, the status panel shows:
+
+| Status | Meaning |
+|--------|---------|
+| **Homelab IP** | Your configured server IP |
+| **Reachable** | Can ping the server |
+| **initrd SSH** | Dropbear port is open (server waiting for unlock) |
+| **System SSH** | Main SSH port open (server fully booted) |
+
+### Status Indicators
+
+- **Server off**: Not reachable, no SSH ports open
+- **Waiting for unlock**: Reachable, initrd SSH open, system SSH closed
+- **Fully booted**: Reachable, system SSH open
+
+## Actions
+
+### Wake
+
+Sends a Wake-on-LAN magic packet to power on your server.
+
+1. Click "Wake"
+2. Wait for the server to power on (usually 10-30 seconds)
+3. Click "Refresh Status" to check if it's reachable
+
+### Unlock
+
+Sends your LUKS passphrase to the server's dropbear SSH.
+
+1. Enter your LUKS passphrase
+2. Click "Unlock"
+3. Wait for the system to boot (usually 30-60 seconds)
+4. Click "Refresh Status" to verify
+
+:::caution
+The passphrase is transmitted to your server over SSH. It's never stored by articwake.
+:::
+
+## Workflow
+
+Typical usage:
+
+1. **Open the web UI** from your phone or laptop
+2. **Check status** - is the server reachable?
+3. **Wake** - if server is off, send WOL packet
+4. **Wait** - for the server to boot to initrd (~10-30s)
+5. **Refresh** - check that initrd SSH is open
+6. **Unlock** - enter LUKS passphrase
+7. **Wait** - for full boot (~30-60s)
+8. **Refresh** - verify system SSH is open
+9. **Done** - your server is now accessible
+
+## Mobile Usage
+
+The web UI is designed to work well on mobile devices:
+
+- Responsive layout adapts to screen size
+- Large touch targets for buttons
+- Simple, focused interface
+
+## Troubleshooting
+
+### Can't log in
+
+- Verify your PIN is correct
+- Check you haven't been rate limited (10 attempts/min)
+- Verify the service is running: `ssh root@<pi-ip> "rc-service articwake status"`
+
+### Wake not working
+
+- Verify MAC address in configuration
+- Check WOL is enabled in server BIOS
+- Ensure Pi and server are on the same network segment (or broadcast address is correct)
+
+### Unlock not working
+
+- Verify the initrd SSH port is shown as open
+- Check your LUKS passphrase is correct
+- Verify SSH key is authorized in server's initrd
+- Check `/var/log/articwake.log` for errors

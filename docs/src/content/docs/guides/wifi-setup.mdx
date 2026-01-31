@@ -1,0 +1,128 @@
+---
+title: WiFi Setup
+description: Configuring WiFi for the Raspberry Pi Zero 2 W.
+---
+
+The articwake SD card image uses wpa_supplicant for WiFi configuration.
+
+## Basic Configuration
+
+Create `wifi.conf` in `/boot/articwake/` with your network details:
+
+```conf
+country=US
+network={
+    ssid="YourNetworkName"
+    psk="YourNetworkPassword"
+}
+```
+
+## Country Code
+
+The `country` setting is required for regulatory compliance. Common codes:
+
+| Code | Country |
+|------|---------|
+| `US` | United States |
+| `GB` | United Kingdom |
+| `DE` | Germany |
+| `FR` | France |
+| `AU` | Australia |
+| `CA` | Canada |
+| `JP` | Japan |
+
+## Multiple Networks
+
+You can configure multiple networks with priority:
+
+```conf
+country=US
+
+network={
+    ssid="HomeNetwork"
+    psk="homepassword"
+    priority=2
+}
+
+network={
+    ssid="BackupNetwork"
+    psk="backuppassword"
+    priority=1
+}
+```
+
+Higher priority networks are tried first.
+
+## Hidden Networks
+
+For hidden (non-broadcast) networks:
+
+```conf
+country=US
+network={
+    ssid="HiddenNetwork"
+    psk="password"
+    scan_ssid=1
+}
+```
+
+## Enterprise Networks (WPA2-Enterprise)
+
+For networks using 802.1X authentication:
+
+```conf
+country=US
+network={
+    ssid="EnterpriseNetwork"
+    key_mgmt=WPA-EAP
+    eap=PEAP
+    identity="username"
+    password="password"
+    phase2="auth=MSCHAPV2"
+}
+```
+
+## Open Networks
+
+For networks without a password (not recommended):
+
+```conf
+country=US
+network={
+    ssid="OpenNetwork"
+    key_mgmt=NONE
+}
+```
+
+## Troubleshooting
+
+### WiFi not connecting
+
+1. Verify SSID and password are correct
+2. Check the country code matches your region
+3. Ensure quotes are properly formatted
+4. Check `/var/log/articwake-setup.log` for errors
+
+### Finding available networks
+
+SSH into the Pi and scan:
+
+```bash
+iwlist wlan0 scan | grep ESSID
+```
+
+### Checking connection status
+
+```bash
+# Check if connected
+iwconfig wlan0
+
+# Check IP address
+ip addr show wlan0
+```
+
+### Manual connection test
+
+```bash
+wpa_supplicant -i wlan0 -c /etc/wpa_supplicant/wpa_supplicant.conf -d
+```

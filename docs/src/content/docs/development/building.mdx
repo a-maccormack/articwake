@@ -1,0 +1,187 @@
+---
+title: Building from Source
+description: How to build articwake for various platforms.
+---
+
+articwake requires Rust 1.85+ (edition 2024). This guide covers native builds and cross-compilation.
+
+## Prerequisites
+
+### Install Rust
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source $HOME/.cargo/env
+
+# Verify version (1.85+)
+rustc --version
+```
+
+### Clone the Repository
+
+```bash
+git clone https://github.com/a-maccormack/articwake.git
+cd articwake
+```
+
+## Native Build
+
+For running on your development machine:
+
+```bash
+# Debug build
+cargo build
+
+# Release build (optimized)
+cargo build --release
+```
+
+Binary location:
+- Debug: `target/debug/articwake`
+- Release: `target/release/articwake`
+
+## Cross-Compilation
+
+For building on x86 and running on ARM (like Raspberry Pi).
+
+### Install cross
+
+```bash
+cargo install cross --git https://github.com/cross-rs/cross
+```
+
+`cross` uses Docker to provide consistent build environments.
+
+### Build Targets
+
+| Target | Platform | Use Case |
+|--------|----------|----------|
+| `x86_64-unknown-linux-gnu` | x86_64 Linux | Standard servers |
+| `aarch64-unknown-linux-gnu` | ARM64 Linux (glibc) | Pi 4/5, ARM servers |
+| `aarch64-unknown-linux-musl` | ARM64 Linux (musl) | Alpine, static binary |
+| `armv7-unknown-linux-gnueabihf` | ARMv7 Linux | Pi 2/3 (32-bit) |
+
+### Build for Raspberry Pi Zero 2 W
+
+The Pi Zero 2 W is ARM64 (aarch64):
+
+```bash
+# Dynamic linking (glibc)
+cross build --release --target aarch64-unknown-linux-gnu
+
+# Static binary (musl) - recommended for Alpine
+cross build --release --target aarch64-unknown-linux-musl
+```
+
+Binary location: `target/aarch64-unknown-linux-musl/release/articwake`
+
+### Build for Pi 2/3 (32-bit)
+
+```bash
+cross build --release --target armv7-unknown-linux-gnueabihf
+```
+
+## Build Configuration
+
+### Cross.toml
+
+The repository includes a `Cross.toml` configuration:
+
+```toml
+[target.armv7-unknown-linux-gnueabihf]
+image = "ghcr.io/cross-rs/armv7-unknown-linux-gnueabihf:main"
+
+[target.aarch64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:main"
+
+[target.aarch64-unknown-linux-musl]
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-musl:main"
+```
+
+### Cargo Features
+
+articwake uses default features for all dependencies. No special feature flags are needed.
+
+## Build Artifacts
+
+### Binary Size
+
+Approximate release binary sizes:
+
+| Target | Size |
+|--------|------|
+| x86_64-gnu | ~6 MB |
+| aarch64-gnu | ~5 MB |
+| aarch64-musl | ~7 MB |
+| armv7-gnueabihf | ~5 MB |
+
+### Stripping Symbols
+
+To reduce binary size:
+
+```bash
+strip target/release/articwake
+```
+
+Or configure in `Cargo.toml`:
+
+```toml
+[profile.release]
+strip = true
+lto = true
+```
+
+## Development Build
+
+For local development with hot reload:
+
+```bash
+# Install cargo-watch
+cargo install cargo-watch
+
+# Run with auto-reload
+cargo watch -x run
+```
+
+## Troubleshooting
+
+### Rust version too old
+
+```
+error: package `articwake` requires rustc 1.85
+```
+
+Update Rust:
+
+```bash
+rustup update stable
+```
+
+### Cross-compilation fails
+
+Ensure Docker is running and you have pulled the cross images:
+
+```bash
+docker pull ghcr.io/cross-rs/aarch64-unknown-linux-musl:main
+```
+
+### Missing build dependencies
+
+On some systems, you may need:
+
+```bash
+# Debian/Ubuntu
+apt install build-essential pkg-config libssl-dev
+
+# Fedora
+dnf install gcc pkg-config openssl-devel
+```
+
+### Out of memory
+
+Building with LTO can use significant RAM. If OOM, try:
+
+```bash
+# Build with fewer parallel jobs
+cargo build --release -j 2
+```

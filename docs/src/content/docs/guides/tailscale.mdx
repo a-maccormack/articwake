@@ -1,0 +1,111 @@
+---
+title: Tailscale Integration
+description: Secure remote access with Tailscale VPN.
+---
+
+Tailscale provides secure, zero-config VPN access to your articwake instance from anywhere.
+
+## Why Tailscale?
+
+- **Secure by default**: All traffic is encrypted end-to-end
+- **No port forwarding**: Works behind NAT and firewalls
+- **Stable IPs**: Tailscale IPs don't change
+- **Easy setup**: Just one auth key
+
+## Setup
+
+### 1. Get an auth key
+
+1. Go to [Tailscale Admin Console](https://login.tailscale.com/admin/settings/keys)
+2. Generate a new auth key
+3. Copy the key (starts with `tskey-auth-`)
+
+### 2. Add to SD card
+
+Create `tailscale_authkey` in `/boot/articwake/`:
+
+```bash
+echo "tskey-auth-xxxxx" | sudo tee /mnt/articwake/tailscale_authkey
+```
+
+### 3. Boot the Pi
+
+On first boot, the setup script will:
+1. Install Tailscale
+2. Authenticate with your key
+3. Join your Tailscale network
+
+## Accessing articwake
+
+After setup, access the web UI via:
+
+```
+http://<tailscale-hostname>
+```
+
+Find the hostname with:
+
+```bash
+tailscale status
+```
+
+## Using Tailscale IP for Homelab
+
+For the most reliable setup, use your homelab's Tailscale IP in `config.env`:
+
+```ini
+ARTICWAKE_HOMELAB_IP="100.x.y.z"
+```
+
+This ensures articwake can reach your server even if local network conditions change.
+
+## Key Types
+
+Tailscale offers different key types:
+
+| Key Type | Expiry | Use Case |
+|----------|--------|----------|
+| One-off | After first use | Single device setup |
+| Reusable | Configurable | Multiple devices or reinstalls |
+| Ephemeral | Never | Containers, short-lived VMs |
+
+For articwake, a one-off key is usually sufficient.
+
+## Troubleshooting
+
+### Tailscale not connecting
+
+Check the setup log:
+
+```bash
+ssh root@<local-ip>
+cat /var/log/articwake-setup.log | grep -i tailscale
+```
+
+### Manually starting Tailscale
+
+```bash
+tailscale up --authkey=tskey-auth-xxxxx
+```
+
+### Checking status
+
+```bash
+tailscale status
+```
+
+### Re-authenticating
+
+If your key expires or you need to re-auth:
+
+```bash
+tailscale logout
+tailscale up --authkey=<new-key>
+```
+
+## Security Considerations
+
+- Tailscale traffic is encrypted end-to-end
+- Only devices on your Tailscale network can access articwake
+- Consider using Tailscale ACLs for additional restrictions
+- The auth key is deleted after first boot for security

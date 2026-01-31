@@ -1,0 +1,105 @@
+---
+title: API Overview
+description: REST API endpoints for articwake.
+---
+
+articwake provides a REST API for programmatic control of Wake-on-LAN and LUKS unlock operations.
+
+## Base URL
+
+```
+http://<articwake-host>
+```
+
+## Endpoints
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/` | GET | No | Serve embedded web UI |
+| `/api/auth` | POST | No | Verify PIN, return bearer token |
+| `/api/status` | GET | Yes | Server reachability and SSH port status |
+| `/api/wol` | POST | Yes | Send Wake-on-LAN magic packet |
+| `/api/unlock` | POST | Yes | Send LUKS passphrase via SSH |
+
+## Authentication
+
+Protected endpoints require a bearer token in the `Authorization` header.
+
+### Getting a token
+
+```bash
+curl -X POST http://localhost/api/auth \
+  -H "Content-Type: application/json" \
+  -d '{"pin": "your-pin"}'
+```
+
+Response:
+```json
+{
+  "token": "a1b2c3d4e5f6..."
+}
+```
+
+### Using a token
+
+```bash
+curl http://localhost/api/status \
+  -H "Authorization: Bearer a1b2c3d4e5f6..."
+```
+
+### Token expiry
+
+Tokens are valid for **15 minutes** from creation. After expiry, you'll receive a `401 Unauthorized` response and need to re-authenticate.
+
+## Rate Limiting
+
+The `/api/auth` endpoint is rate limited to **10 attempts per minute per IP address**. Exceeding this limit returns `429 Too Many Requests`.
+
+## Error Responses
+
+All error responses follow this format:
+
+```json
+{
+  "error": "Error message describing what went wrong"
+}
+```
+
+### HTTP Status Codes
+
+| Code | Meaning |
+|------|---------|
+| `200` | Success |
+| `400` | Bad request (invalid input) |
+| `401` | Unauthorized (invalid/expired token or wrong PIN) |
+| `429` | Rate limited |
+| `500` | Internal server error |
+
+## Content Types
+
+- Request bodies: `application/json`
+- Response bodies: `application/json`
+
+## Example Workflow
+
+```bash
+# 1. Authenticate
+TOKEN=$(curl -s -X POST http://localhost/api/auth \
+  -H "Content-Type: application/json" \
+  -d '{"pin": "1234"}' | jq -r '.token')
+
+# 2. Check status
+curl -s http://localhost/api/status \
+  -H "Authorization: Bearer $TOKEN" | jq
+
+# 3. Wake the server
+curl -s -X POST http://localhost/api/wol \
+  -H "Authorization: Bearer $TOKEN" | jq
+
+# 4. Wait for boot, then unlock
+sleep 30
+curl -s -X POST http://localhost/api/unlock \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"passphrase": "my-luks-passphrase"}' | jq
+```

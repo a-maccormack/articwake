@@ -1,0 +1,230 @@
+---
+title: Troubleshooting
+description: Common issues and solutions for articwake.
+---
+
+This guide covers common problems and their solutions.
+
+## First Boot Issues
+
+### Pi doesn't connect to WiFi
+
+**Symptoms**: No network activity, can't find Pi on network
+
+**Solutions**:
+1. Check `wifi.conf` format:
+   ```conf
+   country=US
+   network={
+       ssid="YourNetwork"
+       psk="YourPassword"
+   }
+   ```
+2. Verify SSID and password are correct (case-sensitive)
+3. Check country code matches your region
+4. Ensure quotes are straight quotes, not curly
+
+### articwake won't start
+
+**Symptoms**: Service fails to start, web UI unavailable
+
+**Check the setup log**:
+```bash
+ssh root@<pi-ip>
+cat /var/log/articwake-setup.log
+```
+
+**Common causes**:
+- Missing `config.env` file
+- Invalid MAC address format
+- Missing or invalid SSH key
+- PIN file not found
+
+### PIN file issues
+
+**Symptoms**: "Failed to read PIN hash" error
+
+**Solutions**:
+1. Ensure PIN file existed before first boot
+2. Check the hash file was created:
+   ```bash
+   cat /var/lib/articwake/pin.hash
+   ```
+3. Re-create manually if needed:
+   ```bash
+   echo -n "your-pin" | articwake hash-pin > /var/lib/articwake/pin.hash
+   ```
+
+## Authentication Issues
+
+### Can't log in
+
+**Symptoms**: "Invalid PIN" error
+
+**Solutions**:
+1. Verify you're using the correct PIN
+2. Check for rate limiting (wait 60 seconds)
+3. Verify the PIN hash file:
+   ```bash
+   cat /var/lib/articwake/pin.hash
+   ```
+
+### Rate limited
+
+**Symptoms**: "Rate limited" or 429 response
+
+**Solution**: Wait 60 seconds before trying again. Rate limit is 10 attempts per minute.
+
+### Token expired
+
+**Symptoms**: "Invalid or expired token" on API calls
+
+**Solution**: Re-authenticate via `/api/auth`. Tokens expire after 15 minutes.
+
+## Wake-on-LAN Issues
+
+### WOL packet sent but server doesn't wake
+
+**Check BIOS settings**:
+- Wake-on-LAN must be enabled
+- Deep Sleep/ErP may need to be disabled
+
+**Check network**:
+- articwake must be on same network segment
+- Try subnet broadcast address:
+  ```ini
+  ARTICWAKE_HOMELAB_BROADCAST="192.168.1.255"
+  ```
+
+**Check server NIC**:
+```bash
+# On the server (before shutting down)
+ethtool eth0 | grep Wake-on
+# Should show "g" for magic packet
+```
+
+**Test manually**:
+```bash
+# On the Pi
+apk add wakeonlan
+wakeonlan aa:bb:cc:dd:ee:ff
+```
+
+### Wrong MAC address
+
+**Symptoms**: WOL sent but nothing happens
+
+**Find correct MAC**:
+```bash
+# On the server
+ip link show eth0
+# or
+cat /sys/class/net/eth0/address
+```
+
+## LUKS Unlock Issues
+
+### Can't connect to dropbear
+
+**Symptoms**: "Connection refused" error
+
+**Causes**:
+1. Server hasn't booted to initrd yet (wait longer)
+2. Wrong SSH port configured
+3. Network not up in initrd
+
+**Check status first**:
+```bash
+curl http://localhost/api/status -H "Authorization: Bearer $TOKEN"
+# initrd_ssh_open should be true
+```
+
+### SSH key rejected
+
+**Symptoms**: "Authentication failed" error
+
+**Solutions**:
+1. Verify public key is in server's initrd:
+   ```bash
+   # On server, check initrd authorized_keys
+   cat /etc/dropbear/initramfs/authorized_keys
+   ```
+2. Rebuild initramfs after adding key:
+   ```bash
+   update-initramfs -u
+   ```
+3. Verify private key on Pi matches:
+   ```bash
+   ssh-keygen -y -f /etc/secrets/articwake-key
+   # Should match the public key on server
+   ```
+
+### Passphrase not accepted
+
+**Symptoms**: Passphrase sent but disk doesn't unlock
+
+**Solutions**:
+1. Verify correct passphrase:
+   ```bash
+   # Test locally on server
+   cryptsetup open --test-passphrase /dev/sda2
+   ```
+2. Check for keyboard layout issues (initrd uses US layout)
+3. Ensure no invisible characters in passphrase
+
+### Wrong SSH port
+
+**Symptoms**: Connection timeout or refused
+
+**Find correct port**:
+```bash
+# Check dropbear config on server
+grep DROPBEAR /etc/dropbear/initramfs/dropbear.conf
+```
+
+**Update articwake config**:
+```ini
+ARTICWAKE_SSH_PORT="2222"
+```
+
+## Network Issues
+
+### Can't reach articwake
+
+**From local network**:
+1. Find Pi's IP from router DHCP leases
+2. Verify `ARTICWAKE_BIND_HOST="0.0.0.0"` in config
+3. Check Pi is on the network: `ping <pi-ip>`
+
+**From Tailscale**:
+1. Verify Tailscale is running: `tailscale status`
+2. Check Pi appears in Tailscale admin console
+3. Try Tailscale IP directly
+
+### Status shows server unreachable
+
+**Symptoms**: `reachable: false` in status
+
+**Solutions**:
+1. Verify server IP is correct
+2. Check server is on and connected to network
+3. Test ping manually:
+   ```bash
+   ping -c 1 <server-ip>
+   ```
+
+## Log Locations
+
+| Log | Location | Contains |
+|-----|----------|----------|
+| First-boot setup | `/var/log/articwake-setup.log` | WiFi, package install, PIN hashing |
+| Service runtime | `/var/log/articwake.log` | API requests, errors |
+| System log | `/var/log/messages` | General system events |
+
+## Getting Help
+
+If you can't resolve your issue:
+
+1. Check the [GitHub Issues](https://github.com/a-maccormack/articwake/issues)
+2. Include relevant logs when opening an issue
+3. Describe your setup (Pi model, server OS, network config)

@@ -1,0 +1,21 @@
+/* Arctic-inspired color scheme */
+:root {
+	--sl-color-accent-low: #1a365d;
+	--sl-color-accent: #3182ce;
+	--sl-color-accent-high: #bee3f8;
+}
+
+[data-theme='dark'] {
+	--sl-color-accent-low: #1e3a5f;
+	--sl-color-accent: #90cdf4;
+	--sl-color-accent-high: #bee3f8;
+}
+
+/* Better link contrast in dark mode content */
+[data-theme='dark'] .sl-markdown-content a {
+	color: #90cdf4;
+}
+
+[data-theme='dark'] .sl-markdown-content a:hover {
+	color: #bee3f8;
+}

@@ -1,0 +1,180 @@
+---
+title: Environment Variables
+description: Complete reference for all articwake environment variables.
+---
+
+articwake is configured entirely through environment variables. This page provides a complete reference.
+
+## Required Variables
+
+These must be set for articwake to start.
+
+### ARTICWAKE_HOMELAB_MAC
+
+**Required** | No default
+
+The MAC address of your target homelab server. Used for Wake-on-LAN packets.
+
+```bash
+export ARTICWAKE_HOMELAB_MAC="aa:bb:cc:dd:ee:ff"
+```
+
+Accepted formats:
+- Colon-separated: `aa:bb:cc:dd:ee:ff`
+- Dash-separated: `aa-bb-cc-dd-ee-ff`
+- No separator: `aabbccddeeff`
+- Case insensitive: `AA:BB:CC:DD:EE:FF`
+
+### ARTICWAKE_HOMELAB_IP
+
+**Required** | No default
+
+The IP address of your target homelab server. Used for status checks and SSH connections.
+
+```bash
+export ARTICWAKE_HOMELAB_IP="192.168.1.100"
+```
+
+Recommended: Use a Tailscale IP for reliability:
+
+```bash
+export ARTICWAKE_HOMELAB_IP="100.x.y.z"
+```
+
+## Optional Variables
+
+### ARTICWAKE_BIND_HOST
+
+**Optional** | Default: `127.0.0.1`
+
+The IP address to bind the HTTP server to.
+
+```bash
+# Localhost only (default, secure)
+export ARTICWAKE_BIND_HOST="127.0.0.1"
+
+# All interfaces (required for network access)
+export ARTICWAKE_BIND_HOST="0.0.0.0"
+
+# Specific interface
+export ARTICWAKE_BIND_HOST="192.168.1.50"
+```
+
+:::caution
+Setting this to `0.0.0.0` exposes articwake to the network. Use Tailscale or a reverse proxy for secure remote access.
+:::
+
+### ARTICWAKE_PORT
+
+**Optional** | Default: `80`
+
+The HTTP port to listen on.
+
+```bash
+export ARTICWAKE_PORT="8080"
+```
+
+### ARTICWAKE_HOMELAB_BROADCAST
+
+**Optional** | Default: `255.255.255.255`
+
+The broadcast address for Wake-on-LAN packets.
+
+```bash
+# Global broadcast (default)
+export ARTICWAKE_HOMELAB_BROADCAST="255.255.255.255"
+
+# Subnet broadcast (try if WOL doesn't work)
+export ARTICWAKE_HOMELAB_BROADCAST="192.168.1.255"
+```
+
+### ARTICWAKE_SSH_PORT
+
+**Optional** | Default: `2222`
+
+The SSH port for dropbear running in your server's initrd.
+
+```bash
+export ARTICWAKE_SSH_PORT="2222"
+```
+
+Common values:
+- `2222` - Most common for dropbear-initramfs
+- `22` - If dropbear uses standard SSH port
+- `4748` - Some alternative configurations
+
+### ARTICWAKE_SSH_KEY_PATH
+
+**Optional** | Default: `/etc/secrets/articwake-key`
+
+Path to the Ed25519 private key for SSH authentication.
+
+```bash
+export ARTICWAKE_SSH_KEY_PATH="/etc/secrets/articwake-key"
+```
+
+The file must:
+- Exist and be readable
+- Have mode `0600` (owner read/write only)
+- Be a valid Ed25519 private key
+
+### ARTICWAKE_PIN_HASH_PATH
+
+**Optional** | Default: `/var/lib/articwake/pin.hash`
+
+Path to the file containing the Argon2-hashed PIN.
+
+```bash
+export ARTICWAKE_PIN_HASH_PATH="/var/lib/articwake/pin.hash"
+```
+
+Generate with:
+
+```bash
+echo -n "your-pin" | articwake hash-pin > /var/lib/articwake/pin.hash
+```
+
+## Summary Table
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `ARTICWAKE_BIND_HOST` | No | `127.0.0.1` | HTTP bind address |
+| `ARTICWAKE_PORT` | No | `80` | HTTP port |
+| `ARTICWAKE_HOMELAB_MAC` | **Yes** | - | Target MAC address |
+| `ARTICWAKE_HOMELAB_IP` | **Yes** | - | Target IP address |
+| `ARTICWAKE_HOMELAB_BROADCAST` | No | `255.255.255.255` | WOL broadcast address |
+| `ARTICWAKE_SSH_PORT` | No | `2222` | Dropbear SSH port |
+| `ARTICWAKE_SSH_KEY_PATH` | No | `/etc/secrets/articwake-key` | SSH private key path |
+| `ARTICWAKE_PIN_HASH_PATH` | No | `/var/lib/articwake/pin.hash` | PIN hash file path |
+
+## Configuration Examples
+
+### Minimal (Development)
+
+```bash
+export ARTICWAKE_HOMELAB_MAC="aa:bb:cc:dd:ee:ff"
+export ARTICWAKE_HOMELAB_IP="192.168.1.100"
+```
+
+### Full (Production)
+
+```bash
+export ARTICWAKE_BIND_HOST="0.0.0.0"
+export ARTICWAKE_PORT="80"
+export ARTICWAKE_HOMELAB_MAC="aa:bb:cc:dd:ee:ff"
+export ARTICWAKE_HOMELAB_IP="100.x.y.z"
+export ARTICWAKE_HOMELAB_BROADCAST="255.255.255.255"
+export ARTICWAKE_SSH_PORT="2222"
+export ARTICWAKE_SSH_KEY_PATH="/etc/secrets/articwake-key"
+export ARTICWAKE_PIN_HASH_PATH="/var/lib/articwake/pin.hash"
+```
+
+### SD Card (config.env)
+
+```ini
+ARTICWAKE_BIND_HOST="0.0.0.0"
+ARTICWAKE_PORT="80"
+ARTICWAKE_HOMELAB_MAC="aa:bb:cc:dd:ee:ff"
+ARTICWAKE_HOMELAB_IP="100.x.y.z"
+ARTICWAKE_SSH_PORT="2222"
+```

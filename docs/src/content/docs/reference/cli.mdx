@@ -1,0 +1,157 @@
+---
+title: CLI Commands
+description: Command-line interface reference for articwake.
+---
+
+articwake provides a simple CLI with two main commands.
+
+## Running the Server
+
+```bash
+articwake
+```
+
+Starts the HTTP server with configuration from environment variables.
+
+### Example
+
+```bash
+export ARTICWAKE_HOMELAB_MAC="aa:bb:cc:dd:ee:ff"
+export ARTICWAKE_HOMELAB_IP="192.168.1.100"
+./articwake
+```
+
+Output:
+
+```
+2024-01-15T10:30:00.000Z  INFO articwake: Starting articwake server
+2024-01-15T10:30:00.001Z  INFO articwake: Listening on 127.0.0.1:80
+```
+
+### Environment Variables
+
+See [Environment Variables](/reference/environment/) for all configuration options.
+
+## Hashing a PIN
+
+```bash
+echo -n "your-pin" | articwake hash-pin
+```
+
+Reads a PIN from stdin and outputs an Argon2id hash suitable for the `pin.hash` file.
+
+### Example
+
+```bash
+echo -n "1234" | ./articwake hash-pin
+```
+
+Output:
+
+```
+$argon2id$v=19$m=19456,t=2,p=1$randomsalthere$hashedoutputhere
+```
+
+### Save to File
+
+```bash
+echo -n "your-pin" | ./articwake hash-pin > pin.hash
+```
+
+### Interactive Input
+
+For more secure input (no PIN in shell history):
+
+```bash
+read -s -p "Enter PIN: " PIN && echo -n "$PIN" | ./articwake hash-pin > pin.hash
+```
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Success |
+| `1` | Configuration error (missing required env vars) |
+| `1` | File access error (can't read key or PIN hash) |
+
+## Logging
+
+articwake uses structured logging via `tracing`. Log level is controlled by the `RUST_LOG` environment variable:
+
+```bash
+# Default (info level)
+./articwake
+
+# Debug logging
+RUST_LOG=debug ./articwake
+
+# Trace logging (very verbose)
+RUST_LOG=trace ./articwake
+
+# Specific module
+RUST_LOG=articwake::auth=debug ./articwake
+```
+
+### Log Format
+
+```
+2024-01-15T10:30:00.000Z  INFO articwake::api::auth: Authentication attempt ip=192.168.1.100
+2024-01-15T10:30:00.001Z  INFO articwake::api::auth: Authentication successful
+```
+
+## Signal Handling
+
+articwake handles standard Unix signals:
+
+| Signal | Behavior |
+|--------|----------|
+| `SIGTERM` | Graceful shutdown |
+| `SIGINT` (Ctrl+C) | Graceful shutdown |
+
+## Running as a Service
+
+### systemd
+
+Create `/etc/systemd/system/articwake.service`:
+
+```ini
+[Unit]
+Description=articwake Wake-on-LAN and LUKS unlock service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+EnvironmentFile=/etc/articwake/config.env
+ExecStart=/usr/local/bin/articwake
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+
+```bash
+sudo systemctl enable articwake
+sudo systemctl start articwake
+```
+
+### OpenRC (Alpine)
+
+The SD card image includes an OpenRC init script. To manage manually:
+
+```bash
+# Start
+rc-service articwake start
+
+# Stop
+rc-service articwake stop
+
+# Status
+rc-service articwake status
+
+# Enable on boot
+rc-update add articwake default
+```

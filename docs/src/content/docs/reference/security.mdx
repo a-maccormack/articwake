@@ -1,0 +1,177 @@
+---
+title: Security
+description: Security features and best practices for articwake.
+---
+
+articwake is designed with security in mind. This page covers the security features and recommended practices.
+
+## Security Features
+
+### PIN Hashing
+
+PINs are never stored in plaintext. articwake uses **Argon2id**, the winner of the Password Hashing Competition:
+
+- Memory-hard (resistant to GPU attacks)
+- Configurable parameters
+- Random salt per hash
+
+```bash
+# Generate a hash
+echo -n "your-pin" | articwake hash-pin
+```
+
+### Session Tokens
+
+After successful authentication:
+
+- **Format**: 32 random bytes (64 hex characters)
+- **Generation**: Cryptographically secure random number generator
+- **Expiry**: 15 minutes from creation
+- **Storage**: In-memory only (cleared on restart)
+
+### Rate Limiting
+
+Brute-force protection on the `/api/auth` endpoint:
+
+- **Limit**: 10 attempts per minute per IP
+- **Window**: Sliding 60-second window
+- **Scope**: Per IP address
+- **Response**: `429 Too Many Requests`
+
+### Network Binding
+
+By default, articwake binds to `127.0.0.1` (localhost only):
+
+- Not accessible from the network
+- Must be explicitly configured to listen on other interfaces
+- Recommended: Expose via Tailscale VPN
+
+## Security Best Practices
+
+### Use Tailscale
+
+Instead of exposing articwake directly to the internet:
+
+1. Keep the default `127.0.0.1` binding
+2. Install Tailscale on the Pi
+3. Access via Tailscale IP/hostname
+
+Benefits:
+- End-to-end encryption
+- No open ports on your network
+- Identity-based access control
+
+### Strong PIN
+
+Choose a PIN that is:
+- At least 6 characters
+- Not easily guessable (not `1234` or `0000`)
+- Unique to articwake
+
+The rate limiting helps, but a strong PIN is your first defense.
+
+### Protect the SSH Key
+
+The SSH private key is sensitive:
+
+```bash
+# Correct permissions
+chmod 600 /etc/secrets/articwake-key
+chown root:root /etc/secrets/articwake-key
+```
+
+Anyone with this key can unlock your LUKS-encrypted server.
+
+### Secure the Pi
+
+The Raspberry Pi running articwake should be:
+
+- Physically secured (not easily accessible)
+- On a trusted network segment
+- Kept updated with security patches
+
+### First-Boot Security
+
+The SD card image implements secure first-boot handling:
+
+1. PIN file is read and hashed
+2. Original plaintext PIN is securely deleted
+3. SSH key is moved to secure location
+4. Tailscale auth key is deleted after use
+
+## Threat Model
+
+### Protected Against
+
+- **Brute-force attacks**: Rate limiting + Argon2
+- **Token theft**: Short expiry (15 min)
+- **Network sniffing**: Use Tailscale for encryption
+- **PIN file exposure**: Deleted after first boot
+
+### Not Protected Against
+
+- **Physical access**: Someone with physical access to the Pi
+- **Compromised network**: If attacker is on your Tailscale network
+- **Key theft**: If SSH key is stolen
+- **Client-side attacks**: Keyloggers, compromised browsers
+
+### Trust Boundaries
+
+articwake trusts:
+- The local Pi filesystem
+- The configured SSH key
+- The Tailscale network (if used)
+- Dropbear in the server's initrd
+
+## Security Constants
+
+From the source code (`src/auth.rs`):
+
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| `TOKEN_EXPIRY` | 15 minutes | Session token lifetime |
+| `RATE_LIMIT_WINDOW` | 60 seconds | Rate limit time window |
+| `MAX_ATTEMPTS_PER_WINDOW` | 10 | Max auth attempts per IP |
+
+From `src/api/unlock.rs`:
+
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| `MAX_PASSPHRASE_LEN` | 1024 | Max LUKS passphrase length |
+
+## Passphrase Handling
+
+The LUKS passphrase:
+- Is **never stored** by articwake
+- Is validated for dangerous characters
+- Is transmitted over SSH (encrypted)
+- Is sent to `cryptsetup-askpass` via stdin
+
+Control characters are blocked to prevent shell injection:
+- Null bytes
+- Newlines
+- Tabs
+- Escape sequences
+
+## Audit Logging
+
+articwake logs authentication events:
+
+```
+INFO articwake::api::auth: Authentication attempt ip=192.168.1.100
+INFO articwake::api::auth: Authentication successful
+WARN articwake::api::auth: Authentication failed ip=192.168.1.100
+WARN articwake::api::auth: Rate limited ip=192.168.1.100
+```
+
+Review logs at `/var/log/articwake.log` on the SD card image.
+
+## Reporting Security Issues
+
+If you discover a security vulnerability, please report it responsibly:
+
+1. **Do not** open a public GitHub issue
+2. Email the maintainer directly
+3. Allow time for a fix before disclosure
+
+See the repository for contact information.

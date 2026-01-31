@@ -1,0 +1,168 @@
+---
+title: LUKS with Dropbear
+description: Setting up remote LUKS unlock with dropbear SSH.
+---
+
+LUKS (Linux Unified Key Setup) provides full-disk encryption. Dropbear is a lightweight SSH server that can run in the initrd to allow remote unlocking.
+
+## Overview
+
+The setup works as follows:
+
+1. Server boots with encrypted root filesystem
+2. initrd loads with dropbear SSH server
+3. You connect via SSH and enter the LUKS passphrase
+4. Disk unlocks and boot continues normally
+
+## Prerequisites
+
+- Debian/Ubuntu (other distros have similar packages)
+- LUKS-encrypted root partition
+- Static IP or DHCP during boot
+
+## Installation
+
+### Install packages
+
+```bash
+sudo apt install dropbear-initramfs cryptsetup-initramfs
+```
+
+### Configure dropbear
+
+Edit `/etc/dropbear/initramfs/dropbear.conf`:
+
+```bash
+# Use a non-standard port to avoid conflicts with main SSH
+DROPBEAR_OPTIONS="-p 2222 -s -j -k"
+```
+
+Options explained:
+- `-p 2222` - Listen on port 2222
+- `-s` - Disable password login (key only)
+- `-j` - Disable local port forwarding
+- `-k` - Disable remote port forwarding
+
+### Add SSH public key
+
+```bash
+# Add your articwake public key
+cat articwake-key.pub >> /etc/dropbear/initramfs/authorized_keys
+```
+
+### Configure network in initrd
+
+Edit `/etc/initramfs-tools/initramfs.conf`:
+
+```bash
+# For DHCP
+IP=dhcp
+
+# Or for static IP
+# IP=192.168.1.100::192.168.1.1:255.255.255.0:hostname:eth0:off
+```
+
+Format for static: `IP=<client-ip>:<server-ip>:<gw-ip>:<netmask>:<hostname>:<device>:<autoconf>`
+
+### Rebuild initramfs
+
+```bash
+sudo update-initramfs -u
+```
+
+## Unlocking Process
+
+### Manual unlock
+
+```bash
+# Connect to dropbear
+ssh -p 2222 -i articwake-key root@server-ip
+
+# The unlock prompt appears automatically
+# Enter your LUKS passphrase
+```
+
+### How cryptsetup-askpass works
+
+The `cryptsetup-askpass` utility in initrd:
+1. Waits for input on stdin
+2. Passes it to cryptsetup to unlock the disk
+3. Signals the boot process to continue
+
+This is what articwake connects to and sends the passphrase.
+
+## Multiple Encrypted Disks
+
+If you have multiple LUKS volumes, you may need to unlock them all:
+
+```bash
+# Check which devices need unlocking
+cat /etc/crypttab
+```
+
+The cryptsetup-askpass utility handles this automatically if configured correctly.
+
+## Testing
+
+### Before rebooting
+
+Verify the initrd contains dropbear:
+
+```bash
+lsinitramfs /boot/initrd.img-$(uname -r) | grep dropbear
+```
+
+Should show dropbear binaries and config.
+
+### After rebooting
+
+1. Reboot the server
+2. Wait for it to reach initrd (check DHCP leases or known IP)
+3. SSH in:
+   ```bash
+   ssh -p 2222 -i articwake-key root@server-ip
+   ```
+4. Enter passphrase when prompted
+5. Server should continue booting
+
+## Troubleshooting
+
+### Can't connect to dropbear
+
+1. **Network not up**: Check if IP is assigned
+   - Verify `/etc/initramfs-tools/initramfs.conf` network config
+   - Rebuild initramfs: `update-initramfs -u`
+
+2. **Wrong port**: Verify dropbear port in config
+   ```bash
+   grep DROPBEAR /etc/dropbear/initramfs/dropbear.conf
+   ```
+
+3. **Firewall**: initrd usually has no firewall, but check your network
+
+### Key rejected
+
+1. Verify public key is in `/etc/dropbear/initramfs/authorized_keys`
+2. Rebuild initramfs after adding key
+3. Dropbear uses its own key format - Ed25519 works but ensure correct format
+
+### Passphrase not accepted
+
+1. Test locally first with `cryptsetup open`
+2. Verify correct LUKS slot has your passphrase
+3. Check keyboard layout issues (initrd may use US layout)
+
+### Boot continues without unlock
+
+Check `/etc/crypttab` has correct device and options:
+
+```
+root_crypt UUID=xxxx-xxxx-xxxx none luks
+```
+
+## Security Considerations
+
+- Use a dedicated SSH key for initrd unlock
+- The initrd SSH key is separate from your main system
+- Dropbear regenerates host keys on each boot
+- articwake is configured to accept any host key for this reason

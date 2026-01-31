@@ -1,0 +1,172 @@
+---
+title: SSH Key Setup
+description: Generating and configuring SSH keys for articwake.
+---
+
+articwake uses SSH public key authentication to connect to your server's dropbear initrd. This guide covers generating and installing the required keys.
+
+## Generate a Key Pair
+
+```bash
+ssh-keygen -t ed25519 -f articwake-key -N ""
+```
+
+This creates:
+- `articwake-key` - Private key (keep secret, goes on articwake Pi)
+- `articwake-key.pub` - Public key (goes on your server's initrd)
+
+### Why Ed25519?
+
+- Smaller keys (better for embedded systems)
+- Fast operations
+- Strong security
+- Well-supported by dropbear
+
+## Install the Public Key on Your Server
+
+Add the public key to your server's dropbear authorized_keys:
+
+```bash
+# On your server
+cat articwake-key.pub >> /etc/dropbear/initramfs/authorized_keys
+```
+
+Then rebuild the initramfs:
+
+```bash
+sudo update-initramfs -u
+```
+
+## Install the Private Key on articwake
+
+### SD Card Image
+
+Copy the private key to the SD card before first boot:
+
+```bash
+sudo cp articwake-key /mnt/articwake/ssh_key
+sudo chmod 600 /mnt/articwake/ssh_key
+```
+
+### Manual Installation
+
+Copy to the configured path:
+
+```bash
+# Default path
+sudo cp articwake-key /etc/secrets/articwake-key
+sudo chmod 600 /etc/secrets/articwake-key
+sudo chown root:root /etc/secrets/articwake-key
+
+# Or set custom path via environment
+export ARTICWAKE_SSH_KEY_PATH="/path/to/your/key"
+```
+
+## Key Permissions
+
+The private key must have strict permissions:
+
+```bash
+chmod 600 /path/to/articwake-key
+```
+
+articwake will fail to start if the key file is readable by others.
+
+## Testing the Key
+
+Before relying on articwake, test SSH manually:
+
+```bash
+# Boot your server to initrd (don't unlock yet)
+# Then from your workstation:
+
+ssh -p 2222 -i articwake-key root@server-ip
+```
+
+If you see the unlock prompt, your key is working.
+
+## Multiple Keys
+
+You can authorize multiple keys in dropbear for backup access:
+
+```bash
+# On your server, add all public keys
+cat key1.pub key2.pub key3.pub >> /etc/dropbear/initramfs/authorized_keys
+sudo update-initramfs -u
+```
+
+## Key Rotation
+
+To rotate the articwake key:
+
+1. Generate a new key pair:
+   ```bash
+   ssh-keygen -t ed25519 -f articwake-key-new -N ""
+   ```
+
+2. Add the new public key to your server:
+   ```bash
+   cat articwake-key-new.pub >> /etc/dropbear/initramfs/authorized_keys
+   sudo update-initramfs -u
+   ```
+
+3. Test the new key works
+
+4. Update articwake with the new private key:
+   ```bash
+   # SSH into the Pi
+   ssh root@articwake-ip
+
+   # Replace the key
+   cat > /etc/secrets/articwake-key << 'EOF'
+   -----BEGIN OPENSSH PRIVATE KEY-----
+   ...
+   -----END OPENSSH PRIVATE KEY-----
+   EOF
+   chmod 600 /etc/secrets/articwake-key
+   ```
+
+5. Remove the old public key from your server:
+   ```bash
+   # Edit and remove the old key line
+   nano /etc/dropbear/initramfs/authorized_keys
+   sudo update-initramfs -u
+   ```
+
+## Troubleshooting
+
+### Permission denied
+
+```
+Permission denied (publickey)
+```
+
+1. Verify public key is in `/etc/dropbear/initramfs/authorized_keys`
+2. Rebuild initramfs: `update-initramfs -u`
+3. Check private key permissions: `chmod 600 articwake-key`
+
+### Key format issues
+
+Dropbear supports OpenSSH key format. If you have issues:
+
+```bash
+# Convert to dropbear format (usually not needed)
+dropbearconvert openssh dropbear articwake-key articwake-key.dropbear
+```
+
+### Wrong key configured
+
+Check the key path in articwake config:
+
+```bash
+echo $ARTICWAKE_SSH_KEY_PATH
+# Should match where you placed the key
+```
+
+### Key not found
+
+```
+Failed to read SSH key: No such file or directory
+```
+
+Verify the key exists at the configured path and articwake has permission to read it.

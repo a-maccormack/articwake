@@ -1,0 +1,119 @@
+---
+title: SD Card Setup
+description: Detailed guide for setting up the Alpine Linux SD card image.
+---
+
+This guide covers all the files needed to configure the articwake SD card image before first boot.
+
+## Required Files
+
+Create these files in `/boot/articwake/` (the SD card's boot partition) before powering on your Pi.
+
+### 1. config.env
+
+Environment variables for articwake. Copy from `config.env.example`.
+
+```ini
+# Required - your homelab server's MAC address
+ARTICWAKE_HOMELAB_MAC="aa:bb:cc:dd:ee:ff"
+
+# Required - your homelab server's IP (Tailscale IP recommended)
+ARTICWAKE_HOMELAB_IP="100.x.y.z"
+
+# Optional settings with defaults shown
+# ARTICWAKE_BIND_HOST="0.0.0.0"
+# ARTICWAKE_PORT="80"
+# ARTICWAKE_SSH_PORT="2222"
+# ARTICWAKE_HOMELAB_BROADCAST="255.255.255.255"
+```
+
+### 2. wifi.conf
+
+WiFi credentials in wpa_supplicant format. Copy from `wifi.conf.example`.
+
+```conf
+country=US
+network={
+    ssid="YourNetworkName"
+    psk="YourNetworkPassword"
+}
+```
+
+See [WiFi Setup](/guides/wifi-setup/) for more details.
+
+### 3. ssh_key
+
+Ed25519 private key for SSH access to your homelab's initrd. This key must be authorized in your server's dropbear SSH configuration.
+
+```bash
+# Generate a new key if needed
+ssh-keygen -t ed25519 -f ssh_key -N ""
+
+# The public key (ssh_key.pub) goes in your server's initrd
+# The private key (ssh_key) goes on the SD card
+```
+
+See [SSH Key Setup](/homelab/ssh-keys/) for details.
+
+### 4. pin
+
+Plain text file containing your desired PIN. This will be hashed with Argon2 and securely deleted on first boot.
+
+```bash
+echo -n "your-pin-here" | sudo tee /mnt/articwake/pin
+```
+
+:::caution
+The PIN file is deleted after first boot. If you need to change your PIN later, you'll need to SSH into the Pi and use the `articwake hash-pin` command.
+:::
+
+## Optional Files
+
+### 5. tailscale_authkey
+
+Tailscale authentication key for automatic VPN setup. If provided, the Pi will join your Tailscale network on first boot.
+
+```bash
+# Get key from https://login.tailscale.com/admin/settings/keys
+echo "tskey-auth-xxxxx" | sudo tee /mnt/articwake/tailscale_authkey
+```
+
+See [Tailscale Integration](/guides/tailscale/) for details.
+
+## First Boot Process
+
+When you power on the Pi for the first time, the setup script will:
+
+1. Connect to WiFi using `wifi.conf`
+2. Install required packages
+3. Hash your PIN with Argon2 (and delete the plaintext file)
+4. Configure the articwake service
+5. Optionally configure Tailscale
+6. Start the web service
+
+This process takes approximately 2-3 minutes.
+
+## Verifying Setup
+
+After first boot:
+
+1. Find the Pi's IP address from your router or `tailscale status`
+2. Access the web UI at `http://<pi-ip>`
+3. Log in with your PIN
+4. Check the status page shows your homelab's configuration
+
+## Log Files
+
+If something goes wrong, check these logs:
+
+| Log | Location |
+|-----|----------|
+| First-boot setup | `/var/log/articwake-setup.log` |
+| Service runtime | `/var/log/articwake.log` |
+
+SSH into the Pi to view logs:
+
+```bash
+ssh root@<pi-ip>
+cat /var/log/articwake-setup.log
+```

@@ -1,0 +1,165 @@
+---
+title: Architecture
+description: Technical architecture and code structure of articwake.
+---
+
+articwake is a Rust web service built with Actix-web. This page covers the codebase structure and key design decisions.
+
+## Project Structure
+
+```
+src/
+├── main.rs              # Entry point, HTTP server setup
+├── lib.rs               # Library exports for testing
+├── config.rs            # Environment variable configuration
+├── auth.rs              # PIN verification, sessions, rate limiting
+├── api/
+│   ├── mod.rs           # API module, require_auth middleware
+│   ├── auth.rs          # POST /api/auth
+│   ├── status.rs        # GET /api/status
+│   ├── wol.rs           # POST /api/wol
+│   └── unlock.rs        # POST /api/unlock
+├── services/
+│   ├── mod.rs           # Services module
+│   ├── network.rs       # Ping and port checks
+│   ├── wol.rs           # Wake-on-LAN packet generation
+│   └── ssh.rs           # SSH client for LUKS unlock
+└── static/
+    ├── index.html       # Embedded web UI
+    └── app.js           # Frontend JavaScript
+```
+
+## Key Components
+
+### HTTP Server (`main.rs`)
+
+The entry point configures Actix-web with:
+- Static file serving (embedded via rust-embed)
+- API routes under `/api/`
+- Shared application state (`AppState`)
+- Structured logging with tracing
+
+### Configuration (`config.rs`)
+
+Loads settings from environment variables:
+- Required: `ARTICWAKE_HOMELAB_MAC`, `ARTICWAKE_HOMELAB_IP`
+- Optional: bind host, port, SSH settings, file paths
+- MAC address validation (12 hex digits, any separator)
+
+### Authentication (`auth.rs`)
+
+Implements security features:
+- **PIN verification**: Argon2id password hashing
+- **Session tokens**: 32 random bytes, 15-minute expiry
+- **Rate limiting**: 10 attempts per minute per IP
+- **Token extraction**: Bearer token from Authorization header
+
+### API Endpoints (`api/`)
+
+Each endpoint is a separate module:
+
+| Module | Endpoint | Function |
+|--------|----------|----------|
+| `auth.rs` | POST /api/auth | Verify PIN, issue token |
+| `status.rs` | GET /api/status | Check server reachability |
+| `wol.rs` | POST /api/wol | Send magic packet |
+| `unlock.rs` | POST /api/unlock | SSH passphrase delivery |
+
+### Services (`services/`)
+
+Business logic separated from HTTP handling:
+
+| Module | Purpose |
+|--------|---------|
+| `network.rs` | Ping checks, TCP port probing |
+| `wol.rs` | MAC parsing, magic packet creation |
+| `ssh.rs` | SSH connection, PTY/shell, passphrase transmission |
+
+### Static Assets (`static/`)
+
+Embedded into the binary via `rust-embed`:
+- `index.html` - Single-page web UI
+- `app.js` - Frontend logic (vanilla JavaScript)
+
+## Dependencies
+
+| Crate | Purpose |
+|-------|---------|
+| `actix-web` | Web framework |
+| `tokio` | Async runtime |
+| `russh` | Pure Rust SSH client |
+| `wake-on-lan` | Magic packet generation |
+| `argon2` | Password hashing |
+| `rust-embed` | Embed static files |
+| `tracing` | Structured logging |
+| `serde` | JSON serialization |
+
+## Data Flow
+
+### Authentication Flow
+
+```
+Client                     articwake                    Disk
+  │                            │                          │
+  │  POST /api/auth {pin}      │                          │
+  │ ──────────────────────────>│                          │
+  │                            │  read pin.hash           │
+  │                            │ ────────────────────────>│
+  │                            │  Argon2 verify           │
+  │                            │<─────────────────────────│
+  │  {token}                   │                          │
+  │<───────────────────────────│                          │
+```
+
+### Unlock Flow
+
+```
+Client                     articwake                    Server
+  │                            │                          │
+  │  POST /api/unlock          │                          │
+  │ ──────────────────────────>│                          │
+  │                            │  SSH connect (port 2222) │
+  │                            │ ────────────────────────>│
+  │                            │  Public key auth         │
+  │                            │<────────────────────────>│
+  │                            │  Request PTY/shell       │
+  │                            │ ────────────────────────>│
+  │                            │  Send passphrase         │
+  │                            │ ────────────────────────>│
+  │                            │  (disk unlocks, SSH ends)│
+  │  {success: true}           │                          │
+  │<───────────────────────────│                          │
+```
+
+## Security Design
+
+### Defense in Depth
+
+1. **Bind to localhost** - Default `127.0.0.1`, expose via Tailscale
+2. **PIN hashing** - Argon2id with random salt
+3. **Rate limiting** - 10 attempts/min per IP
+4. **Token expiry** - 15-minute sessions
+5. **Key-only SSH** - No password auth to dropbear
+6. **Passphrase transit** - Never stored, only transmitted
+
+### Threat Model
+
+articwake assumes:
+- The Pi is on a trusted network (or Tailscale)
+- The SSH key is kept secure
+- The PIN is not trivially guessable
+- Dropbear in initrd is properly configured
+
+Not protected against:
+- Physical access to the Pi
+- Compromised Tailscale account
+- Keyloggers on client devices
+
+## Async Architecture
+
+articwake uses Tokio for async I/O:
+- HTTP server runs on Actix-web (built on Tokio)
+- SSH operations use russh (async)
+- Network checks use tokio::net
+
+This allows handling multiple concurrent requests efficiently on low-power hardware like the Pi Zero 2 W.

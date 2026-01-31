@@ -1,0 +1,129 @@
+---
+title: Authentication API
+description: POST /api/auth - Authenticate and receive a session token.
+---
+
+Verify a PIN and receive a bearer token for accessing protected endpoints.
+
+## Endpoint
+
+```
+POST /api/auth
+```
+
+## Request
+
+### Headers
+
+```
+Content-Type: application/json
+```
+
+### Body
+
+```json
+{
+  "pin": "your-pin"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `pin` | string | Yes | Your authentication PIN |
+
+## Response
+
+### Success (200 OK)
+
+```json
+{
+  "token": "a1b2c3d4e5f6789012345678901234567890123456789012345678901234"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `token` | string | 64-character hex string (32 bytes) |
+
+### Invalid PIN (401 Unauthorized)
+
+```json
+{
+  "error": "Invalid PIN"
+}
+```
+
+### Rate Limited (429 Too Many Requests)
+
+```json
+{
+  "error": "Rate limited"
+}
+```
+
+### Server Error (500 Internal Server Error)
+
+```json
+{
+  "error": "Failed to read PIN hash: ..."
+}
+```
+
+## Token Details
+
+- **Format**: 64 hex characters (32 random bytes)
+- **Expiry**: 15 minutes from creation
+- **Storage**: In-memory only (cleared on restart)
+
+## Rate Limiting
+
+- **Limit**: 10 attempts per minute per IP address
+- **Window**: 60 seconds (sliding window)
+- **Scope**: Per IP address (different IPs have separate limits)
+
+If rate limited, wait 60 seconds before retrying.
+
+## Example
+
+### curl
+
+```bash
+curl -X POST http://localhost/api/auth \
+  -H "Content-Type: application/json" \
+  -d '{"pin": "1234"}'
+```
+
+### JavaScript (fetch)
+
+```javascript
+const response = await fetch('http://localhost/api/auth', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ pin: '1234' })
+});
+
+const { token } = await response.json();
+```
+
+### Python (requests)
+
+```python
+import requests
+
+response = requests.post(
+    'http://localhost/api/auth',
+    json={'pin': '1234'}
+)
+token = response.json()['token']
+```
+
+## Using the Token
+
+Include the token in the `Authorization` header for protected endpoints:
+
+```bash
+curl http://localhost/api/status \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+See [API Overview](/api/overview/) for the full authentication flow.

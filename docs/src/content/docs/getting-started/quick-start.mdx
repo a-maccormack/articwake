@@ -1,0 +1,100 @@
+---
+title: Quick Start
+description: Get articwake running on your Raspberry Pi Zero 2 W in 5 minutes.
+---
+
+The easiest way to deploy articwake is using the pre-built Alpine Linux SD card image for Raspberry Pi Zero 2 W.
+
+## Prerequisites
+
+- Raspberry Pi Zero 2 W
+- microSD card (1GB minimum)
+- Your homelab server with:
+  - Wake-on-LAN enabled in BIOS
+  - LUKS encryption with dropbear SSH in initrd
+- SSH key authorized in your server's initrd
+
+## Step 1: Download and flash the image
+
+```bash
+# Download the latest release
+wget https://github.com/a-maccormack/articwake/releases/latest/download/articwake-alpine-rpi.img.gz
+
+# Flash to SD card (replace /dev/sdX with your SD card device)
+gunzip -c articwake-alpine-rpi.img.gz | sudo dd of=/dev/sdX bs=4M status=progress
+sync
+```
+
+## Step 2: Mount and configure
+
+```bash
+sudo mount /dev/sdX1 /mnt
+
+# Copy example configs
+sudo cp /mnt/articwake/config.env.example /mnt/articwake/config.env
+sudo cp /mnt/articwake/wifi.conf.example /mnt/articwake/wifi.conf
+```
+
+## Step 3: Edit configuration files
+
+Edit `config.env` with your homelab details:
+
+```bash
+sudo nano /mnt/articwake/config.env
+```
+
+Set these required values:
+```ini
+ARTICWAKE_HOMELAB_MAC="aa:bb:cc:dd:ee:ff"
+ARTICWAKE_HOMELAB_IP="100.x.y.z"  # Tailscale IP recommended
+```
+
+Edit `wifi.conf` with your WiFi credentials:
+
+```bash
+sudo nano /mnt/articwake/wifi.conf
+```
+
+```conf
+network={
+    ssid="YourNetworkName"
+    psk="YourPassword"
+}
+```
+
+## Step 4: Add secrets
+
+```bash
+# Copy your SSH key (must be authorized in homelab's initrd)
+sudo cp ~/.ssh/homelab_unlock_key /mnt/articwake/ssh_key
+sudo chmod 600 /mnt/articwake/ssh_key
+
+# Create PIN file (will be hashed and deleted on first boot)
+echo -n "your-pin-here" | sudo tee /mnt/articwake/pin
+```
+
+## Step 5: Optional - Enable Tailscale
+
+For secure remote access, add a Tailscale auth key:
+
+```bash
+# Get key from https://login.tailscale.com/admin/settings/keys
+echo "tskey-auth-xxxxx" | sudo tee /mnt/articwake/tailscale_authkey
+```
+
+## Step 6: Boot and access
+
+```bash
+sudo umount /mnt
+```
+
+1. Insert the SD card into your Raspberry Pi Zero 2 W
+2. Power on and wait 2-3 minutes for first boot setup
+3. Access the web UI at `http://<pi-ip>` or via Tailscale
+
+## What's next?
+
+- [SD Card Setup](/guides/sd-card-setup/) - Detailed file requirements
+- [Configuration](/guides/configuration/) - All environment variables
+- [Tailscale Integration](/guides/tailscale/) - Secure remote access
+- [Troubleshooting](/reference/troubleshooting/) - Common issues

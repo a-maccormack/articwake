@@ -1,0 +1,57 @@
+---
+title: articwake
+description: Remote Wake-on-LAN and LUKS unlock for homelab servers
+template: splash
+hero:
+  tagline: Cold server → wake it from the arctic.
+  image:
+    file: ../../assets/houston.webp
+  actions:
+    - text: Get Started
+      link: /getting-started/quick-start/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/a-maccormack/articwake
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Features
+
+<CardGrid stagger>
+	<Card title="Wake-on-LAN" icon="rocket">
+		Send magic packets to wake your server from anywhere in the world.
+	</Card>
+	<Card title="LUKS Unlock" icon="open-book">
+		Remotely send passphrase to dropbear initrd for disk decryption.
+	</Card>
+	<Card title="Secure by Default" icon="approve-check">
+		Argon2-hashed PIN, session tokens, and rate limiting protect your homelab.
+	</Card>
+	<Card title="Ready-to-Flash" icon="setting">
+		Pre-built Alpine Linux SD card image for Raspberry Pi Zero 2 W.
+	</Card>
+</CardGrid>
+
+## What is articwake?
+
+articwake is a Rust-based web service designed for Raspberry Pi Zero 2 W that lets you remotely wake and unlock LUKS-encrypted homelab servers.
+
+**The problem:** You have a homelab server with full-disk encryption. When it's powered off, you can't access it remotely. Wake-on-LAN can power it on, but LUKS encryption requires entering a passphrase before the system boots.
+
+**The solution:** articwake runs on a small, always-on Raspberry Pi. When you need your server, you:
+1. Open the articwake web UI from your phone or laptop
+2. Enter your PIN to authenticate
+3. Click "Wake" to send a Wake-on-LAN packet
+4. Click "Unlock" to send your LUKS passphrase via SSH to the server's initrd
+
+Your encrypted server boots up, accessible from anywhere.
+
+## Quick Links
+
+- [Quick Start Guide](/getting-started/quick-start/) - Get running in 5 minutes
+- [Configuration Reference](/guides/configuration/) - Environment variables and settings
+- [API Documentation](/api/overview/) - REST API endpoints
+- [Security Guide](/reference/security/) - Security best practices

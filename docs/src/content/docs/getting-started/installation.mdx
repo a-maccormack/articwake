@@ -1,0 +1,89 @@
+---
+title: Installation
+description: Multiple ways to install and run articwake.
+---
+
+articwake can be installed in several ways depending on your needs.
+
+## Pre-built SD Card Image (Recommended)
+
+The easiest option for Raspberry Pi Zero 2 W. See the [Quick Start Guide](/getting-started/quick-start/).
+
+## Pre-built Binaries
+
+Download from [GitHub Releases](https://github.com/a-maccormack/articwake/releases/latest):
+
+| Binary | Platform | Notes |
+|--------|----------|-------|
+| `articwake-x86_64-linux` | x86_64 Linux | Standard servers |
+| `articwake-aarch64-linux` | ARM64 Linux (glibc) | Raspberry Pi 4/5, ARM servers |
+| `articwake-aarch64-linux-musl` | ARM64 Linux (musl) | Alpine Linux, static binary |
+| `articwake-armv7-linux` | ARMv7 Linux | Raspberry Pi 2/3 (32-bit) |
+
+### Using a pre-built binary
+
+```bash
+# Download
+wget https://github.com/a-maccormack/articwake/releases/latest/download/articwake-x86_64-linux
+chmod +x articwake-x86_64-linux
+
+# Set required environment variables
+export ARTICWAKE_HOMELAB_MAC="aa:bb:cc:dd:ee:ff"
+export ARTICWAKE_HOMELAB_IP="192.168.1.100"
+
+# Run
+./articwake-x86_64-linux
+```
+
+## Building from Source
+
+### Requirements
+
+- Rust 1.85+ (edition 2024)
+
+### Build steps
+
+```bash
+# Clone the repository
+git clone https://github.com/a-maccormack/articwake.git
+cd articwake
+
+# Build release binary
+cargo build --release
+
+# Binary is at target/release/articwake
+```
+
+### Cross-compilation
+
+For Raspberry Pi Zero 2 W (aarch64):
+
+```bash
+# Install cross
+cargo install cross --git https://github.com/cross-rs/cross
+
+# Build for ARM64
+cross build --release --target aarch64-unknown-linux-gnu
+
+# Or for Alpine Linux (static binary)
+cross build --release --target aarch64-unknown-linux-musl
+```
+
+Available cross-compilation targets:
+
+| Target | Platform |
+|--------|----------|
+| `x86_64-unknown-linux-gnu` | Standard x86 servers |
+| `aarch64-unknown-linux-gnu` | ARM64 with glibc |
+| `aarch64-unknown-linux-musl` | ARM64 static binary |
+| `armv7-unknown-linux-gnueabihf` | ARMv7 (Pi 2/3 32-bit) |
+
+## Setup After Installation
+
+Regardless of installation method, you need to:
+
+1. [Generate an SSH keypair](/homelab/ssh-keys/) for connecting to your server's initrd
+2. [Create a PIN hash](/reference/cli/) for authentication
+3. [Configure environment variables](/guides/configuration/)
+
+See the [Configuration Guide](/guides/configuration/) for details.

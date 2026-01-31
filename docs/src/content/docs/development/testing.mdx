@@ -1,0 +1,211 @@
+---
+title: Testing
+description: Running tests and linting for articwake.
+---
+
+articwake has comprehensive unit and integration tests. This guide covers running tests locally.
+
+## Running Tests
+
+### All Tests
+
+```bash
+cargo test --verbose
+```
+
+This runs:
+- Unit tests in each module
+- Integration tests in `tests/`
+
+### Specific Test
+
+```bash
+# Run tests matching a pattern
+cargo test validate_mac
+
+# Run tests in a specific module
+cargo test auth::tests
+```
+
+### Test Output
+
+Show stdout for passing tests:
+
+```bash
+cargo test -- --nocapture
+```
+
+## Test Coverage
+
+### Unit Tests
+
+Located within each source file using `#[cfg(test)]` modules:
+
+| Module | Tests |
+|--------|-------|
+| `config.rs` | MAC validation (8 tests) |
+| `auth.rs` | Token generation, rate limiting, PIN verification (12 tests) |
+| `api/unlock.rs` | Passphrase validation (8 tests) |
+| `services/wol.rs` | MAC parsing, packet creation (13 tests) |
+| `services/network.rs` | Host status (5 tests) |
+
+### Integration Tests
+
+Located in `tests/`:
+
+| File | Purpose |
+|------|---------|
+| `api_integration.rs` | End-to-end API endpoint tests |
+
+## Linting
+
+### Clippy
+
+```bash
+cargo clippy -- -D warnings
+```
+
+The CI pipeline treats all warnings as errors.
+
+### Common Clippy Fixes
+
+```bash
+# Auto-fix what clippy can
+cargo clippy --fix
+```
+
+## Formatting
+
+### Check Format
+
+```bash
+cargo fmt -- --check
+```
+
+### Auto-Format
+
+```bash
+cargo fmt
+```
+
+## CI Pipeline
+
+The GitHub Actions workflow runs on every push and PR:
+
+```yaml
+jobs:
+  test:
+    steps:
+      - cargo test --verbose
+      - cargo clippy -- -D warnings
+      - cargo fmt -- --check
+```
+
+All checks must pass before merging.
+
+## Writing Tests
+
+### Unit Test Example
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_mac_colon_separated() {
+        assert!(validate_mac("aa:bb:cc:dd:ee:ff").is_ok());
+    }
+
+    #[test]
+    fn test_validate_mac_invalid() {
+        assert!(validate_mac("invalid").is_err());
+    }
+}
+```
+
+### Async Test Example
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[actix_rt::test]
+    async fn test_async_function() {
+        let result = async_operation().await;
+        assert!(result.is_ok());
+    }
+}
+```
+
+### Test with Temp Files
+
+```rust
+#[test]
+fn test_with_temp_file() {
+    use tempfile::NamedTempFile;
+    use std::io::Write;
+
+    let mut file = NamedTempFile::new().unwrap();
+    writeln!(file, "test content").unwrap();
+
+    // Use file.path() in your test
+}
+```
+
+## Testing Tips
+
+### Mock Configuration
+
+Tests often need a mock `Config`:
+
+```rust
+fn create_test_config() -> Config {
+    Config {
+        bind_host: "127.0.0.1".to_string(),
+        port: 8080,
+        homelab_mac: "aa:bb:cc:dd:ee:ff".to_string(),
+        homelab_ip: "192.168.1.100".to_string(),
+        homelab_broadcast: "255.255.255.255".to_string(),
+        ssh_port: 2222,
+        ssh_key_path: PathBuf::from("/tmp/test-key"),
+        pin_hash_path: PathBuf::from("/tmp/test-hash"),
+    }
+}
+```
+
+### Testing Rate Limiting
+
+Rate limit tests use the actual rate limiter:
+
+```rust
+#[test]
+fn test_rate_limit_blocks_over_limit() {
+    let state = AppState::new(config);
+    let ip = "192.168.1.1".parse().unwrap();
+
+    // Exhaust the limit
+    for _ in 0..10 {
+        assert!(state.check_rate_limit(ip).is_ok());
+    }
+
+    // 11th attempt should fail
+    assert!(state.check_rate_limit(ip).is_err());
+}
+```
+
+## Troubleshooting
+
+### Tests hang
+
+Some tests may timeout waiting for network:
+- Ensure you're not testing against a real server
+- Check for hardcoded IPs that might be routable
+
+### Flaky tests
+
+Rate limit tests can be timing-sensitive:
+- Tests run in parallel by default
+- Use unique IPs for each test
+- Consider using `cargo test -- --test-threads=1`

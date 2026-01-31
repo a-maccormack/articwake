@@ -1,0 +1,107 @@
+---
+title: Status API
+description: GET /api/status - Check server reachability and SSH port status.
+---
+
+Check if your homelab server is reachable and which SSH ports are open.
+
+## Endpoint
+
+```
+GET /api/status
+```
+
+## Authentication
+
+Requires bearer token in `Authorization` header.
+
+```
+Authorization: Bearer <token>
+```
+
+## Response
+
+### Success (200 OK)
+
+```json
+{
+  "homelab_ip": "100.x.y.z",
+  "reachable": true,
+  "initrd_ssh_open": false,
+  "system_ssh_open": true,
+  "initrd_ssh_port": 2222
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `homelab_ip` | string | Configured target server IP |
+| `reachable` | boolean | Server responds to ping |
+| `initrd_ssh_open` | boolean | Dropbear SSH port is open |
+| `system_ssh_open` | boolean | Main SSH port (22) is open |
+| `initrd_ssh_port` | number | Configured dropbear port |
+
+### Unauthorized (401)
+
+```json
+{
+  "error": "Invalid or expired token"
+}
+```
+
+## Status Interpretation
+
+| reachable | initrd_ssh | system_ssh | Server State |
+|-----------|------------|------------|--------------|
+| `false` | `false` | `false` | Powered off |
+| `true` | `true` | `false` | Waiting for LUKS unlock |
+| `true` | `false` | `true` | Fully booted |
+| `true` | `false` | `false` | Booting (between stages) |
+
+## Timeouts
+
+- Ping check: 3 seconds
+- SSH port check: 3 seconds per port
+
+If the server is unreachable, the endpoint may take up to 6+ seconds to respond.
+
+## Example
+
+### curl
+
+```bash
+curl http://localhost/api/status \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response interpretation
+
+```bash
+# Server is off
+{"reachable": false, "initrd_ssh_open": false, "system_ssh_open": false, ...}
+
+# Server waiting for unlock (time to send passphrase!)
+{"reachable": true, "initrd_ssh_open": true, "system_ssh_open": false, ...}
+
+# Server fully booted
+{"reachable": true, "initrd_ssh_open": false, "system_ssh_open": true, ...}
+```
+
+## Polling
+
+For automation, you can poll this endpoint to wait for state changes:
+
+```bash
+# Wait for server to reach initrd
+while true; do
+  STATUS=$(curl -s http://localhost/api/status -H "Authorization: Bearer $TOKEN")
+  INITRD=$(echo $STATUS | jq -r '.initrd_ssh_open')
+
+  if [ "$INITRD" = "true" ]; then
+    echo "Ready for unlock"
+    break
+  fi
+
+  sleep 5
+done
+```

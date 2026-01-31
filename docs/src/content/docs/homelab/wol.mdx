@@ -1,0 +1,160 @@
+---
+title: Wake-on-LAN Setup
+description: Configuring your homelab server for Wake-on-LAN.
+---
+
+Wake-on-LAN (WOL) allows your server to be powered on remotely by sending a special network packet.
+
+## How It Works
+
+1. Your server's NIC receives a "magic packet" containing its MAC address
+2. The NIC signals the motherboard to power on
+3. The system boots normally
+
+## Prerequisites
+
+- Ethernet connection (WiFi WOL is rarely supported)
+- Motherboard/BIOS with WOL support
+- NIC with WOL capability
+- Server must be in S5 (soft-off) state
+
+## BIOS/UEFI Configuration
+
+Enter BIOS setup (usually Del, F2, or F12 at boot) and enable:
+
+| Setting | Common Names |
+|---------|--------------|
+| Wake-on-LAN | WOL, Wake on LAN, Power On by PCI-E |
+| Network Boot | PXE Boot, Network Stack (not required, but often in same menu) |
+| Deep Sleep | Disable if WOL not working |
+
+Location varies by manufacturer:
+
+- **ASUS**: Advanced → APM Configuration → Power On By PCI-E
+- **MSI**: Settings → Advanced → Wake Up Event Setup → Resume By PCI-E Device
+- **Gigabyte**: Power → Wake on LAN
+- **Dell**: Power Management → Wake on LAN
+- **HP**: Power → Hardware Power Management → S5 Wake on LAN
+
+## Linux Network Configuration
+
+Some NICs require WOL to be explicitly enabled at the OS level before shutdown.
+
+### Check current status
+
+```bash
+sudo ethtool eth0 | grep Wake-on
+```
+
+- `g` = WOL enabled (magic packet)
+- `d` = WOL disabled
+
+### Enable WOL
+
+```bash
+sudo ethtool -s eth0 wol g
+```
+
+### Make persistent
+
+The setting resets on reboot. To persist:
+
+#### systemd (recommended)
+
+Create `/etc/systemd/system/wol.service`:
+
+```ini
+[Unit]
+Description=Enable Wake-on-LAN
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/ethtool -s eth0 wol g
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable it:
+
+```bash
+sudo systemctl enable wol.service
+```
+
+#### NetworkManager
+
+```bash
+nmcli connection modify "Wired connection 1" 802-3-ethernet.wake-on-lan magic
+```
+
+#### /etc/network/interfaces (Debian)
+
+```
+auto eth0
+iface eth0 inet dhcp
+    ethernet-wol g
+```
+
+## Finding Your MAC Address
+
+```bash
+ip link show eth0
+# Look for "link/ether aa:bb:cc:dd:ee:ff"
+```
+
+Or:
+
+```bash
+cat /sys/class/net/eth0/address
+```
+
+## Testing WOL
+
+From another machine on the same network:
+
+```bash
+# Install wakeonlan
+sudo apt install wakeonlan
+
+# Send magic packet
+wakeonlan aa:bb:cc:dd:ee:ff
+```
+
+Your server should power on within a few seconds.
+
+## Troubleshooting
+
+### Server doesn't wake
+
+1. **Check BIOS settings** - WOL must be enabled
+2. **Check NIC settings** - Run `ethtool eth0` to verify WOL is enabled
+3. **Check power state** - Server must be in S5 (soft shutdown), not hard powered off
+4. **Check network** - Sender must be on same broadcast domain
+5. **Check MAC address** - Verify the correct MAC is configured
+
+### WOL works once then stops
+
+- NIC WOL setting may reset after shutdown
+- Create a systemd service to re-enable on boot (see above)
+
+### Deep sleep issues
+
+Some systems enter S4 (hibernate) or disconnect NIC in sleep:
+- Disable "Deep Sleep" or "ErP" in BIOS
+- Ensure "Power On After Power Failure" is enabled
+
+### Testing from articwake
+
+After configuring your server, test from articwake:
+
+```bash
+# SSH into the Pi
+ssh root@<articwake-ip>
+
+# Install wakeonlan
+apk add wakeonlan
+
+# Test directly
+wakeonlan aa:bb:cc:dd:ee:ff
+```

@@ -1,2 +1,7 @@
 /target
 .envrc
+
+# Docs build output
+docs/dist/
+docs/node_modules/
+docs/.astro/
