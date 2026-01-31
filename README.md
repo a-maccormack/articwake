@@ -8,6 +8,8 @@ A Rust-based web service for Raspberry Pi Zero 2 W that provides remote Wake-on-
 
 _Cold server → wake it from the arctic._
 
+📖 **[Documentation](https://articwake.pages.dev)**
+
 ## Features
 
 - **Wake-on-LAN**: Send magic packets to wake your server
